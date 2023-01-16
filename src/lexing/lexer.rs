@@ -21,8 +21,13 @@ impl Lexer {
     }
     let mut current_string = String::new();
     let mut current: char = self.peek();
-    if current.is_whitespace() && !self.empty() {
-      current = self.pop();
+    while current.is_whitespace() && current != '\n' && !self.empty() {
+      self.pop();
+      current = self.peek();
+    }
+    if current == '\n' {
+      self.pop();
+      return Token::EOL;
     }
 
     let sc_token = match current {
@@ -56,7 +61,8 @@ impl Lexer {
         current_string.push(self.pop());
         current = self.peek();
       }
-      return match &current_string {
+      return match current_string.as_str() {
+          "def" => Token::Def,
           _ => Token::Identifier(current_string)
       }
     }
@@ -69,5 +75,23 @@ impl Lexer {
 
   fn peek(&self) -> char {
     self.raw_text.chars().next().unwrap()
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  use Token::*;
+  #[test]
+  fn test_parser() {
+    let raw = "def hello() {\n2 + 3\n}".to_string();
+
+    let mut lexer = Lexer::new(raw);
+    let expected_tokens = &[Token::Def, Token::Identifier("hello".into()),
+      OpenParenth, CloseParenth, OpenCurly, EOL, Integer(2), Plus, Integer(3), EOL, ClosedCurly];
+
+    for expected in expected_tokens {
+      assert_eq!(lexer.next(), *expected);
+    }
   }
 }
