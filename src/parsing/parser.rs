@@ -1,10 +1,10 @@
-use crate::{lexing::{Lexer, Token}, ast::Scope};
+use crate::{lexing::{Lexer, Token}, ast::{Scope, Function}};
 use std::{collections::VecDeque, error::Error, fmt::Display};
 
 pub struct Parser {
   lexer: Lexer,
   current_token: Token,
-  scope_stack: VecDeque<Scope>
+  scope_stack: VecDeque<Box<dyn Scope>>
 }
 
 pub type ParsingResult = Result<(), Box<dyn Error>>;
@@ -47,7 +47,25 @@ impl Parser {
       return Err(Box::new(ParsingError::MissingToken));
     }
 
-    // let Token::Identifier()
+    let Token::Identifier(func_name) = self.next() else {
+      return Err(Box::new(ParsingError::MissingToken))
+    };
+
+    let Token::OpenParenth = self.next() else {
+      return Err(Box::new(ParsingError::MissingToken))
+    };
+
+    let Token::CloseParenth = self.next() else {
+      return Err(Box::new(ParsingError::MissingToken))
+    };
+
+    let Token::OpenCurly = self.next() else {
+      return Err(Box::new(ParsingError::MissingToken));
+    };
+
+    let function = Function::default();
+    function.name = func_name.to_string();
+    self.scope_stack.push_front(function);
 
     Ok(())
   }
@@ -55,5 +73,9 @@ impl Parser {
   fn next(&mut self) -> &Token {
     self.current_token = self.lexer.next();
     &self.current_token
+  }
+  
+  fn top_scope(&mut self) -> &mut dyn Scope {
+    return &mut self.scope_stack[0];
   }
 }
