@@ -7,7 +7,7 @@ pub struct Parser {
   scope_stack: VecDeque<Box<dyn Scope>>
 }
 
-pub type ParsingResult = Result<(), Box<dyn Error>>;
+pub type ParsingResult<T> = Result<T, Box<dyn Error>>;
 
 #[derive(Debug)]
 pub enum ParsingError {
@@ -32,7 +32,7 @@ impl Parser {
     }
   }
 
-  pub fn parse(&mut self) -> ParsingResult {
+  pub fn parse(&mut self) -> ParsingResult<()> {
     while self.current_token != Token::EOF {
       if self.current_token == Token::Def {
         self.parse_function()?
@@ -42,16 +42,23 @@ impl Parser {
     Ok(())
   }
 
-  fn parse_function(&mut self) -> ParsingResult {
+
+  fn parse_function(&mut self) -> ParsingResult<()> {
     if self.current_token != Token::Def {
       return Err(Box::new(ParsingError::MissingToken));
     }
 
-    let Token::Identifier(func_name) = self.next() else {
-      return Err(Box::new(ParsingError::MissingToken))
-    };
+    let mut func_name = String::new();
 
-    let Token::OpenParenth = self.next() else {
+    {
+      let Token::Identifier(fn_name) = self.next().clone() else {
+        return Err(Box::new(ParsingError::MissingToken))
+      };
+
+      func_name = fn_name.clone();
+    }
+    
+    if Token::OpenParenth != *self.next() {
       return Err(Box::new(ParsingError::MissingToken))
     };
 
@@ -63,9 +70,9 @@ impl Parser {
       return Err(Box::new(ParsingError::MissingToken));
     };
 
-    let function = Function::default();
+    let mut function = Function::default();
     function.name = func_name.to_string();
-    self.scope_stack.push_front(function);
+    self.scope_stack.push_front(Box::new(function));
 
     Ok(())
   }
@@ -76,6 +83,6 @@ impl Parser {
   }
   
   fn top_scope(&mut self) -> &mut dyn Scope {
-    return &mut self.scope_stack[0];
+    return &mut *self.scope_stack[0];
   }
 }
