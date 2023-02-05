@@ -2,7 +2,7 @@ use inkwell::values::{AnyValue, AnyValueEnum};
 
 use super::{variable::Variable, statement::Statement};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expression {
   Binary(Option<Box<Expression>>, Option<Box<Expression>>, BinaryExpressionType),
   Unary(Option<Box<Expression>>, UnaryExpressionType),
@@ -10,7 +10,7 @@ pub enum Expression {
   IntegerLiteral(i64),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum BinaryExpressionType {
   Addition,
   Subtraction,
@@ -30,7 +30,7 @@ impl BinaryExpressionType {
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum UnaryExpressionType {
   Reference,
   Dereference,
