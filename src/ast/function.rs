@@ -11,16 +11,16 @@ pub struct Function {
 }
 
 impl Scope for Function {
-    fn variables(&self) -> &HashMap<String, Variable> {
-      &self.variables
-    }
-
     fn commands(&self) -> &Vec<Box<dyn Statement>> {
       &self.commands
     }
 
-    fn variables_mut(&mut self) -> &mut HashMap<String, Variable> {
-      &mut self.variables
+    fn get_variable(&self, name: &str) -> Option<&Variable> {
+      self.variables.get(name)
+    }
+
+    fn set_variable(&self, variable: Variable) {
+        todo!()
     }
 
     fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>> {

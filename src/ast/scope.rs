@@ -4,9 +4,8 @@ use super::{variable::Variable, Statement};
 
 
 pub trait Scope {
-  fn variables(&self) -> &HashMap<String, Variable>;
+  fn get_variable(&self, name: &str) -> Option<&Variable>;
+  fn set_variable(&self, variable: Variable);
   fn commands(&self) -> &Vec<Box<dyn Statement>>;
-
-  fn variables_mut(&mut self) -> &mut HashMap<String, Variable>;
   fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>>;
 }

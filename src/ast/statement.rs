@@ -1,4 +1,4 @@
-use inkwell::{module::Module, context::Context, builder::Builder, values::AnyValue};
+use inkwell::{module::Module, context::Context, builder::Builder, values::{AnyValue, BasicValue}};
 
 pub struct Compiler<'ctx> {
   pub context: &'ctx Context,

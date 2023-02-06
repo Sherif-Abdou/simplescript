@@ -1,18 +1,20 @@
 use std::collections::VecDeque;
 
-use crate::{lexing::Token, ast::Expression};
+use crate::{lexing::Token, ast::{Expression, Scope}};
 
-use super::parser::{ParsingResult};
+use super::{parser::{ParsingResult}, scope_stark::ScopeStack};
 
-pub struct ExpressionParser {
+pub struct ExpressionParser<'a> {
   // top_expression: Option<Expression>,
-  expression_stack: VecDeque<Expression>
+  expression_stack: VecDeque<Expression>,
+  scope_stack: Option<&'a ScopeStack>,
 }
 
-impl ExpressionParser {
+impl<'a> ExpressionParser<'a> {
   pub fn new() -> Self {
     Self {
       expression_stack: VecDeque::new(),
+      scope_stack: None,
     }
   }
 
@@ -26,6 +28,13 @@ impl ExpressionParser {
       Token::Minus => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Subtraction)),
       Token::Star => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
       Token::Slash => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Division)),
+      Token::Identifier(name) => {
+        if let Some(stack) = self.scope_stack {
+          if stack.get_variable(&name).is_some() {
+            self.append_expr(Expression::VariableRead(name.clone()));
+          }
+        }
+      },
       _ => unimplemented!()
     };
 
