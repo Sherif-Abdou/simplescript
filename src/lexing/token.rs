@@ -3,6 +3,7 @@ pub enum Token {
   Identifier(String),
   Integer(i64),
   Def,
+  Return,
   OpenCurly,
   ClosedCurly,
   OpenParenth,

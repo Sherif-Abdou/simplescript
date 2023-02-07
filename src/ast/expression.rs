@@ -98,6 +98,7 @@ impl Expression {
     new_expression
   }
 }
+
 impl Statement for Expression {
     fn visit<'a>(&'a self, data: &'a super::statement::Compiler) -> Option<Box<dyn AnyValue + 'a>> {
       if let Expression::Binary(left, right, binary_type) = self {
@@ -116,8 +117,18 @@ impl Statement for Expression {
         }
       }
 
+      
+
       if let Expression::VariableRead(variable_name) = self {
-        // data.builder.build_load(ptr, name)
+          let load = data.builder.build_load(data.variable_table.borrow()[variable_name], variable_name);
+          return Some(Box::new(load));
+      }
+      
+      if let Expression::IntegerLiteral(ref literal) = self {
+          let t = data.context.i64_type();
+          let value = t.const_int(literal.abs() as u64, *literal < 0);
+
+          return Some(Box::new(value));
       }
       None
     }

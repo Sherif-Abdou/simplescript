@@ -18,6 +18,10 @@ impl SetVariable {
 
 impl Statement for SetVariable {
     fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+        if !data.variable_table.borrow().contains_key(&self.name) {
+            let allocation = data.builder.build_alloca(data.context.i64_type(), &self.name);
+            data.variable_table.borrow_mut().insert(self.name.clone(), allocation);
+        }
         let value = self.value.visit(data).unwrap();
         let e = value.as_any_value_enum();
         let res = match e {

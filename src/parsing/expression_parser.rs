@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{lexing::Token, ast::{Expression, Scope}};
 
-use super::{parser::{ParsingResult}, scope_stark::ScopeStack};
+use super::{parser::{ParsingResult}, scope_stack::ScopeStack};
 
 pub struct ExpressionParser<'a> {
   // top_expression: Option<Expression>,

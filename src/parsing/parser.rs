@@ -1,12 +1,12 @@
-use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable}};
+use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, Statement, ReturnCommand}};
 use std::{collections::VecDeque, error::Error, fmt::Display};
 
-use super::{scope_stark::ScopeStack, expression_parser::ExpressionParser};
+use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser};
 
 pub struct Parser {
   lexer: Lexer,
   current_token: Token,
-  scope_stack: ScopeStack
+  scope_stack: ScopeStack,
 }
 
 pub type ParsingResult<T> = Result<T, Box<dyn Error>>;
@@ -34,15 +34,28 @@ impl Parser {
     }
   }
 
-  pub fn parse(&mut self) -> ParsingResult<()> {
+  pub fn parse(&mut self) -> ParsingResult<Box<dyn Scope>> {
     while self.current_token != Token::EOF {
       if self.current_token == Token::Def {
         self.parse_function()?
       } else if let Token::Identifier(iden) = self.current_token.clone() {
         self.parse_set_variable(&iden)?;
+      } else if self.current_token == Token::Return {
+
       }
+      self.next();
     }
 
+    Ok(self.scope_stack.pop_front().unwrap())
+  }
+
+  fn parse_return(&mut self) -> ParsingResult<()> {
+    if self.current_token != Token::Return {
+      return Err(Box::new(ParsingError::MissingToken));
+    }
+    let value = self.parse_expression()?;
+    let command = ReturnCommand::new(value);
+    self.scope_stack.commands_mut().push(Box::new(command));
     Ok(())
   }
 

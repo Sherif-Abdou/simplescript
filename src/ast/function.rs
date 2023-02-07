@@ -27,3 +27,15 @@ impl Scope for Function {
       &mut self.commands
     }
 }
+
+impl Statement for Function {
+    fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+        let fn_value = data.module.add_function(&self.name, data.context.i64_type().fn_type(&[], false), None);
+        let block = data.context.append_basic_block(fn_value, "entry");
+        data.builder.position_at_end(block);
+        for command in &self.commands {
+          command.visit(data);
+        }
+        return Some(Box::new(fn_value));
+    }
+}

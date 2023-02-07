@@ -63,6 +63,7 @@ impl Lexer {
       }
       return match current_string.as_str() {
           "def" => Token::Def,
+          "return" => Token::Return,
           _ => Token::Identifier(current_string)
       }
     }

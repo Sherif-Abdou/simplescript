@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::ast::Scope;
+use crate::ast::{Scope, Statement};
 
 #[derive(Default)]
 pub struct ScopeStack {
@@ -12,10 +12,16 @@ impl ScopeStack {
     self.scope_stack.push_front(scope);
   }
 
-  pub fn pop_front(&mut self, scope: Box<dyn Scope>) -> Option<Box<dyn Scope>> {
+  pub fn pop_front(&mut self) -> Option<Box<dyn Scope>> {
     self.scope_stack.pop_front()
   }
 
+}
+
+impl Statement for ScopeStack {
+    fn visit<'a>(&'a self, data: &'a crate::ast::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+        None
+    }
 }
 
 impl Scope for ScopeStack {
