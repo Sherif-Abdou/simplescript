@@ -1,3 +1,5 @@
+use std::{fs::{File}, io::Read};
+
 use runner::run;
 
 mod ast;
@@ -5,6 +7,18 @@ mod lexing;
 mod parsing;
 mod runner;
 
+
+fn load_file(relative_path: &str) -> String {
+    let mut f = File::open(relative_path).expect("Missing file");
+    
+    let mut buf: String = "".to_string();
+
+    f.read_to_string(&mut buf);
+
+    return buf;
+}
+
 fn main() {
-    run("def main() {\nreturn 2+ 3\n}".to_string());
+    let file_path = "./test/main.txt";
+    run(load_file(file_path));
 }

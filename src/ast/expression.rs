@@ -126,7 +126,7 @@ impl Statement for Expression {
       
       if let Expression::IntegerLiteral(ref literal) = self {
           let t = data.context.i64_type();
-          let value = t.const_int(literal.abs() as u64, *literal < 0);
+          let value = t.const_int(literal.abs() as u64, false);
 
           return Some(Box::new(value));
       }

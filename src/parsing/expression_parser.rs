@@ -18,6 +18,12 @@ impl<'a> ExpressionParser<'a> {
     }
   }
 
+  pub fn with_scope_stack(stack: &'a ScopeStack) -> Self {
+    let mut new = Self::new();
+    new.scope_stack = Some(stack);
+    return new;
+  }
+
   pub fn consume(&mut self, token: Token) -> ParsingResult<()> {
     match token {
       Token::Integer(v) => {
@@ -29,13 +35,16 @@ impl<'a> ExpressionParser<'a> {
       Token::Star => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
       Token::Slash => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Division)),
       Token::Identifier(name) => {
+        dbg!("Looking for variable");
         if let Some(stack) = self.scope_stack {
           if stack.get_variable(&name).is_some() {
+            dbg!("Found it");
             self.append_expr(Expression::VariableRead(name.clone()));
+            return Ok(());
           }
         }
       },
-      _ => unimplemented!()
+      _ => panic!("Didn't expect {:?}", token)
     };
 
     Ok(())

@@ -19,8 +19,8 @@ impl Scope for Function {
       self.variables.get(name)
     }
 
-    fn set_variable(&self, variable: Variable) {
-        todo!()
+    fn set_variable(&mut self, variable: Variable) {
+      self.variables.insert(variable.name.clone(), variable);
     }
 
     fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>> {

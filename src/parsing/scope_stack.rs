@@ -38,7 +38,7 @@ impl Scope for ScopeStack {
         None
     }
 
-    fn set_variable(&self, variable: crate::ast::Variable) {
+    fn set_variable(&mut self, variable: crate::ast::Variable) {
         self.scope_stack[0].set_variable(variable);
     }
 
