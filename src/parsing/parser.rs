@@ -1,5 +1,5 @@
-use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, Statement, ReturnCommand, Variable}};
-use std::{collections::VecDeque, error::Error, fmt::Display, cell::RefCell};
+use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, Statement, ReturnCommand, Variable, DataType}};
+use std::{collections::{VecDeque, HashMap}, error::Error, fmt::Display, cell::RefCell};
 
 use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser};
 
@@ -7,6 +7,7 @@ pub struct Parser {
   lexer: RefCell<Lexer>,
   current_token: RefCell<Token>,
   scope_stack: ScopeStack,
+  data_types: HashMap<String, DataType>
 }
 
 pub type ParsingResult<T> = Result<T, Box<dyn Error>>;
@@ -27,10 +28,16 @@ impl Error for ParsingError {}
 impl Parser {
   pub fn new(raw: String) -> Self {
     let mut lexer = Lexer::new(raw);
+    let mut data_types = HashMap::new();
+    data_types.insert("i64".to_string(), DataType {
+        symbol: "i64".to_string(),
+        value: crate::ast::DataTypeEnum::Primitive,
+    });
     Self {
       scope_stack: ScopeStack::default(),
       current_token: RefCell::new(lexer.next()),
       lexer: RefCell::new(lexer),
+      data_types,
     }
   }
 
@@ -41,7 +48,7 @@ impl Parser {
       } else if let Token::Identifier(iden) = self.current_token().clone() {
         self.parse_set_variable(&iden)?;
       } else if self.current_token() == Token::Return {
-        self.parse_return();
+        self.parse_return()?;
       }
       self.next();
     }
@@ -54,7 +61,7 @@ impl Parser {
       return Err(Box::new(ParsingError::MissingToken));
     }
     self.next();
-    // dbg!("Did return");
+    // // dbg!("Did return");
     let value = self.parse_expression()?;
     let command = ReturnCommand::new(value);
     self.scope_stack.commands_mut().push(Box::new(command));
@@ -77,13 +84,13 @@ impl Parser {
     }
     self.next();
     let expr = self.parse_expression()?;
-    let stmt = SetVariable::new(iden.to_string(), expr);
+    let stmt = SetVariable::new(iden.to_string(), self.data_types["i64"].clone(), expr);
     if self.scope_stack.get_variable(iden).is_none() {
       let variable = Variable {
         name: iden.to_string(),
-        data_type: "i64".to_string(),
+        data_type: self.data_types["i64"].clone(),
       };
-      dbg!("setting variable");
+      // dbg!("setting variable");
       self.scope_stack.set_variable(variable);
     }
     self.scope_stack.commands_mut().push(Box::new(stmt));

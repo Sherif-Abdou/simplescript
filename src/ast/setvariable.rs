@@ -1,16 +1,18 @@
 use inkwell::values::AnyValueEnum;
 
-use super::{Expression, Statement};
+use super::{Expression, Statement, DataType};
 
 pub struct SetVariable {
   name: String,
+  data_type: DataType,
   value: Expression,
 }
 
 impl SetVariable {
-  pub fn new(name: String, value: Expression) -> Self {
+  pub fn new(name: String, data_type: DataType, value: Expression) -> Self {
     Self {
       name,
+      data_type,
       value,
     }
   }
@@ -18,8 +20,9 @@ impl SetVariable {
 
 impl Statement for SetVariable {
     fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+        let data_type = self.data_type.produce_llvm_type(data);
         if !data.variable_table.borrow().contains_key(&self.name) {
-            let allocation = data.builder.build_alloca(data.context.i64_type(), &self.name);
+            let allocation = data.builder.build_alloca(data_type, &self.name);
             data.variable_table.borrow_mut().insert(self.name.clone(), allocation);
         }
         let value = self.value.visit(data).unwrap();

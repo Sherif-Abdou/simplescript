@@ -35,10 +35,10 @@ impl<'a> ExpressionParser<'a> {
       Token::Star => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
       Token::Slash => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Division)),
       Token::Identifier(name) => {
-        dbg!("Looking for variable");
+        // dbg!("Looking for variable");
         if let Some(stack) = self.scope_stack {
           if stack.get_variable(&name).is_some() {
-            dbg!("Found it");
+            // dbg!("Found it");
             self.append_expr(Expression::VariableRead(name.clone()));
             return Ok(());
           }

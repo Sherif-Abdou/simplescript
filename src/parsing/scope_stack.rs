@@ -19,7 +19,7 @@ impl ScopeStack {
 }
 
 impl Statement for ScopeStack {
-    fn visit<'a>(&'a self, data: &'a crate::ast::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+    fn visit<'a>(&self, data: &'a crate::ast::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
         None
     }
 }

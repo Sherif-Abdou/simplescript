@@ -1,6 +1,6 @@
 use inkwell::values::{AnyValue, AnyValueEnum};
 
-use super::{variable::Variable, statement::Statement};
+use super::{statement::Statement};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expression {

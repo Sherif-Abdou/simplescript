@@ -11,6 +11,8 @@ pub fn run(file: String) {
     let module = context.create_module("main");
     let engine = module.create_jit_execution_engine(inkwell::OptimizationLevel::None).unwrap();
 
+    let mut parser = Parser::new(file);
+    let res = parser.parse().unwrap();
     let compiler = Compiler {
         context: &context,
         module,
@@ -18,11 +20,7 @@ pub fn run(file: String) {
         variable_table: RefCell::new(HashMap::new()),
     };
 
-    
-    let mut parser = Parser::new(file);
-    let res = parser.parse().unwrap();
     res.visit(&compiler);
-
     unsafe {
         let main: JitFunction<MainFunc> = engine.get_function("main").unwrap();
         println!("Result: {}", main.call());
