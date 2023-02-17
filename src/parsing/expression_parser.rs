@@ -8,6 +8,7 @@ pub struct ExpressionParser<'a> {
   // top_expression: Option<Expression>,
   expression_stack: VecDeque<Expression>,
   scope_stack: Option<&'a ScopeStack>,
+  parser_stack: VecDeque<ExpressionParser<'a>>
 }
 
 impl<'a> ExpressionParser<'a> {
@@ -15,6 +16,7 @@ impl<'a> ExpressionParser<'a> {
     Self {
       expression_stack: VecDeque::new(),
       scope_stack: None,
+      parser_stack: VecDeque::new(),
     }
   }
 
@@ -24,7 +26,30 @@ impl<'a> ExpressionParser<'a> {
     return new;
   }
 
-  pub fn consume(&mut self, token: Token) -> ParsingResult<()> {
+  pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
+    if !self.parser_stack.is_empty() {
+      let can_continue = self.parser_stack.front_mut().unwrap().consume(token.clone())?;
+      if can_continue {return Ok(true)}
+      let sub_expression = self.parser_stack.pop_front().unwrap().build();
+      match token {
+        Token::CloseSquare => {
+          if let Expression::Array(mut arr) = self.expression_stack.pop_front().unwrap() {
+            arr.push(sub_expression);
+            self.expression_stack.push_front(Expression::Array(arr));
+            return Ok(false);
+          }
+        },
+        Token::Comma => {
+          if let Expression::Array(mut arr) = self.expression_stack.pop_front().unwrap() {
+            arr.push(sub_expression);
+            self.expression_stack.push_front(Expression::Array(arr));
+            self.parser_stack.push_front(ExpressionParser::with_scope_stack(&self.scope_stack.unwrap()));
+          }
+        }
+        _ => panic!("Unexpected token in array literal")
+      }
+      return Ok(true);
+    }
     match token {
       Token::Integer(v) => {
         let mini_expr = Expression::IntegerLiteral(v);
@@ -34,23 +59,34 @@ impl<'a> ExpressionParser<'a> {
       Token::Minus => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Subtraction)),
       Token::Star => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
       Token::Slash => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Division)),
+      Token::OpenSquare => {
+        let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
+        self.parser_stack.push_front(new_parser);
+        self.append_expr(Expression::Array(Vec::new()));
+      },
       Token::Identifier(name) => {
         // dbg!("Looking for variable");
         if let Some(stack) = self.scope_stack {
           if stack.get_variable(&name).is_some() {
             // dbg!("Found it");
             self.append_expr(Expression::VariableRead(name.clone()));
-            return Ok(());
+            return Ok(true);
           }
         }
       },
+      Token::EOL => return Ok(false),
+      Token::Comma => return Ok(false),
+      Token::CloseSquare => return Ok(false),
       _ => panic!("Didn't expect {:?}", token)
     };
 
-    Ok(())
+    Ok(true)
   }
 
   pub fn build(&mut self) -> Expression {
+    if let Expression::Array(_) = self.expression_stack.front().unwrap() {
+      return self.expression_stack.front().unwrap().clone();
+    }
     let mut current = self.expression_stack.pop_front();
     while !self.expression_stack.is_empty() {
       if self.front().is_binary() && !self.binary_right() {

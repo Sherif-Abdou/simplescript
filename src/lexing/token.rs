@@ -6,6 +6,8 @@ pub enum Token {
   Return,
   OpenCurly,
   ClosedCurly,
+  OpenSquare,
+  CloseSquare,
   OpenParenth,
   CloseParenth,
   Plus,
@@ -13,6 +15,8 @@ pub enum Token {
   Star,
   Slash,
   Equal,
+  Colon,
+  Comma,
   EOL,
   EOF,
 }

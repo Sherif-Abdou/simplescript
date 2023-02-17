@@ -1,6 +1,6 @@
 use std::{hash::Hash, collections::HashMap};
 
-use inkwell::{types::{BasicType, BasicTypeEnum}, AddressSpace};
+use inkwell::{types::{BasicType, BasicTypeEnum}, AddressSpace, context::Context};
 
 use super::Compiler;
 
@@ -22,7 +22,7 @@ pub struct DataType {
 }
 
 impl DataType {
-    pub fn produce_llvm_type<'a>(&self, compiler: &'a Compiler) -> Box<dyn BasicType<'a> + 'a> {
+    pub fn produce_llvm_type<'a>(&self, compiler: &'a Context) -> Box<dyn BasicType<'a> + 'a> {
         match &self.value {
             DataTypeEnum::Primitive => self.produce_primitive_llvm_type(compiler),
             DataTypeEnum::Array(ref interior, len) => Box::new(interior.produce_llvm_type(compiler).array_type(*len as u32)),
@@ -31,20 +31,20 @@ impl DataType {
         }
     }
 
-    fn produce_primitive_llvm_type<'a>(&self, compiler: &'a Compiler) -> Box<dyn BasicType<'a> + 'a> {
+    fn produce_primitive_llvm_type<'a>(&self, compiler: &'a Context) -> Box<dyn BasicType<'a> + 'a> {
         match self.symbol.as_str() {
-            "i64" => Box::new(compiler.context.i64_type()),
-            "f64" => Box::new(compiler.context.f64_type()),
-            "bool" => Box::new(compiler.context.bool_type()),
-            "char" => Box::new(compiler.context.i8_type()),
+            "i64" => Box::new(compiler.i64_type()),
+            "f64" => Box::new(compiler.f64_type()),
+            "bool" => Box::new(compiler.bool_type()),
+            "char" => Box::new(compiler.i8_type()),
             _ => panic!("Unidentified primitive")
         }
     }
 
-    fn produce_struct_llvm_type<'a>(&self, compiler: &'a Compiler, data_types: &DataTypeVector, names: &NameMap) -> Box<dyn BasicType<'a> + 'a> {
+    fn produce_struct_llvm_type<'a>(&self, compiler: &'a Context, data_types: &DataTypeVector, names: &NameMap) -> Box<dyn BasicType<'a> + 'a> {
         let v: Vec<BasicTypeEnum> = data_types.iter().map(|v| v.produce_llvm_type(compiler).as_basic_type_enum()).collect();
         let slice = v.as_slice();
-        let struct_type = compiler.context.struct_type(slice, false);
+        let struct_type = compiler.struct_type(slice, false);
         Box::new(struct_type)
     }
 }

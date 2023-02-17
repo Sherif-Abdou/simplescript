@@ -1,13 +1,16 @@
 use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, Statement, ReturnCommand, Variable, DataType}};
-use std::{collections::{VecDeque, HashMap}, error::Error, fmt::Display, cell::RefCell};
+use std::{collections::{VecDeque, HashMap}, error::Error, fmt::Display, cell::RefCell, ops::IndexMut};
+use regex::Regex;
 
 use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser};
+
+const ARRAY_REGEX: &'static str = r"\[(.*):(\d+)\]";
 
 pub struct Parser {
   lexer: RefCell<Lexer>,
   current_token: RefCell<Token>,
   scope_stack: ScopeStack,
-  data_types: HashMap<String, DataType>
+  pub data_types: HashMap<String, DataType>
 }
 
 pub type ParsingResult<T> = Result<T, Box<dyn Error>>;
@@ -79,23 +82,55 @@ impl Parser {
   }
 
   fn parse_set_variable(&mut self, iden: &str) -> ParsingResult<()> {
-    if self.next() != Token::Equal {
+    let mut val = self.next();
+    if val == Token::Colon {
+      let data_type_iden = self.next();
+      if let Token::Identifier(ref data_iden) = data_type_iden {
+        let variable = Variable {
+          name: iden.to_string(),
+          data_type: self.data_types[data_iden].clone(),
+        };
+        // dbg!("setting variable");
+        self.scope_stack.set_variable(variable);
+        val = self.next()
+      } else {
+        panic!("Missing data type");
+      }
+    }
+    if val != Token::Equal {
       return Err(Box::new(ParsingError::MissingToken));
     }
     self.next();
     let expr = self.parse_expression()?;
-    let stmt = SetVariable::new(iden.to_string(), self.data_types["i64"].clone(), expr);
     if self.scope_stack.get_variable(iden).is_none() {
       let variable = Variable {
         name: iden.to_string(),
-        data_type: self.data_types["i64"].clone(),
+        data_type: self.expression_type(&expr),
       };
       // dbg!("setting variable");
       self.scope_stack.set_variable(variable);
     }
+    let data_type = self.scope_stack.get_variable(iden).expect("Missing variable").data_type.clone();
+    let stmt = SetVariable::new(iden.to_string(), data_type, expr);
     self.scope_stack.commands_mut().push(Box::new(stmt));
     Ok(())
   }
+
+fn expression_type(&mut self, expr: &Expression) -> DataType {
+  let symbol = expr.data_type(&self.scope_stack).expect("Can't infer data type").to_string();
+  let re = Regex::new(ARRAY_REGEX).unwrap();
+  if let Some(captures) = re.captures(&symbol) {
+    let interior_type = captures.get(1).unwrap().as_str();
+    let count: u64 = captures.get(2).unwrap().as_str().parse().unwrap();
+    let data_type = DataType {
+      symbol: symbol.clone(),
+      value: crate::ast::DataTypeEnum::Array(Box::new(self.data_types[interior_type].clone()), count)
+    };
+    self.data_types.insert(symbol.clone(), data_type.clone());
+    return data_type;
+  }
+  self.data_types[&symbol].clone()
+}
 
   fn parse_function(&mut self) -> ParsingResult<()> {
     if self.current_token() != Token::Def {

@@ -20,9 +20,9 @@ impl SetVariable {
 
 impl Statement for SetVariable {
     fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        let data_type = self.data_type.produce_llvm_type(data);
+        let data_type = self.data_type.produce_llvm_type(data.context);
         if !data.variable_table.borrow().contains_key(&self.name) {
-            let allocation = data.builder.build_alloca(data_type, &self.name);
+            let allocation = data.builder.build_alloca(data_type.as_basic_type_enum(), &self.name);
             data.variable_table.borrow_mut().insert(self.name.clone(), allocation);
         }
         let value = self.value.visit(data).unwrap();

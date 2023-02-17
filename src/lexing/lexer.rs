@@ -40,6 +40,10 @@ impl Lexer {
       '{' => Some(Token::OpenCurly),
       '}' => Some(Token::ClosedCurly),
       '=' => Some(Token::Equal),
+      ':' => Some(Token::Colon),
+      '[' => Some(Token::OpenSquare),
+      ']' => Some(Token::CloseSquare),
+      ',' => Some(Token::Comma),
       _ => None
     };
 

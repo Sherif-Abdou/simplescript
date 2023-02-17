@@ -69,6 +69,7 @@ name = "languageproject"
 version = "0.1.0"
 dependencies = [
  "inkwell",
+ "regex",
 ]
 
 [[package]]

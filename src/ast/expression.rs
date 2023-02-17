@@ -1,11 +1,12 @@
-use inkwell::values::{AnyValue, AnyValueEnum};
+use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue}, types::BasicType};
 
-use super::{statement::Statement};
+use super::{statement::Statement, DataType, Scope};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expression {
   Binary(Option<Box<Expression>>, Option<Box<Expression>>, BinaryExpressionType),
   Unary(Option<Box<Expression>>, UnaryExpressionType),
+  Array(Vec<Expression>),
   VariableRead(String),
   IntegerLiteral(i64),
 }
@@ -52,7 +53,27 @@ impl Expression {
         Expression::Unary(_, t) => t.precidence(),
         Expression::VariableRead(_) => 100,
         Expression::IntegerLiteral(_) => 100,
+        Expression::Array(_) => 200,
     }
+  }
+
+  pub fn data_type(&self, scope: &dyn Scope) -> Option<String> {
+    match self {
+        Expression::Binary(l, r, _) => {
+          if l.as_ref().unwrap().data_type(scope) == r.as_ref().unwrap().data_type(scope) {
+            return l.as_ref().unwrap().data_type(scope).clone();
+          }
+          return None;
+        },
+        Expression::Unary(_, _) => todo!(),
+        Expression::VariableRead(v) => return Some(scope.get_variable(v).unwrap().data_type.symbol.clone()),
+        Expression::IntegerLiteral(_) => return Some("i64".to_string()),
+        Expression::Array(ref list) => {
+          // dbg!("is array");
+          return Some(format!("[{}:{}]", list[0].data_type(scope)?, list.len()));
+        },
+    };
+    None
   }
 
   pub fn is_binary(&self) -> bool {
@@ -129,6 +150,42 @@ impl Statement for Expression {
           let value = t.const_int(literal.abs() as u64, false);
 
           return Some(Box::new(value));
+      }
+      if let Expression::Array(ref values) = self {
+        let expressions: Vec<Box<dyn AnyValue>> = values.iter().map(|v| v.visit(data)).flatten().collect();
+        let thing: ArrayValue = match expressions[0].as_any_value_enum() {
+            AnyValueEnum::ArrayValue(ref v) => {
+              let mapped: Vec<ArrayValue> = expressions.iter().map(|v| v.as_any_value_enum().into_array_value()).collect();
+              let value = v.get_type().const_array(mapped.as_slice());
+              value
+            },
+            AnyValueEnum::IntValue(ref v) => {
+              let mapped: Vec<IntValue> = expressions.iter().map(|v| v.as_any_value_enum().into_int_value()).collect();
+              let value = v.get_type().const_array(mapped.as_slice());
+              value
+            },
+            AnyValueEnum::FloatValue(ref v) => {
+              let mapped: Vec<FloatValue> = expressions.iter().map(|v| v.as_any_value_enum().into_float_value()).collect();
+              let value = v.get_type().const_array(mapped.as_slice());
+              value
+            },
+            AnyValueEnum::PhiValue(_) => todo!(),
+            AnyValueEnum::FunctionValue(_) => todo!(),
+            AnyValueEnum::PointerValue(ref v) => {
+              let mapped: Vec<PointerValue> = expressions.iter().map(|v| v.as_any_value_enum().into_pointer_value()).collect();
+              let value = v.get_type().const_array(mapped.as_slice());
+              value
+            },
+            AnyValueEnum::StructValue(ref v) => {
+              let mapped: Vec<StructValue> = expressions.iter().map(|v| v.as_any_value_enum().into_struct_value()).collect();
+              let value = v.get_type().const_array(mapped.as_slice());
+              value
+            },
+            AnyValueEnum::VectorValue(ref v) =>  todo!(),
+            AnyValueEnum::InstructionValue(_) => todo!(),
+            AnyValueEnum::MetadataValue(_) => todo!(),
+        };
+        return Some(Box::new(thing));
       }
       None
     }
