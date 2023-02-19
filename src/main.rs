@@ -13,7 +13,7 @@ fn load_file(relative_path: &str) -> String {
     
     let mut buf: String = "".to_string();
 
-    f.read_to_string(&mut buf);
+    f.read_to_string(&mut buf).unwrap();
 
     return buf;
 }

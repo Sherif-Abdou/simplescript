@@ -1,6 +1,7 @@
-use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue}, types::BasicType};
+use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue}, types::BasicType, AddressSpace};
+use inkwell::types::AnyTypeEnum::IntType;
 
-use super::{statement::Statement, DataType, Scope};
+use super::{statement::Statement, DataType, Scope, DataTypeEnum};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expression {
@@ -8,6 +9,7 @@ pub enum Expression {
   Unary(Option<Box<Expression>>, UnaryExpressionType),
   Array(Vec<Expression>),
   VariableRead(String),
+  VariableExtract(String, Box<Expression>),
   IntegerLiteral(i64),
 }
 
@@ -54,6 +56,7 @@ impl Expression {
         Expression::VariableRead(_) => 100,
         Expression::IntegerLiteral(_) => 100,
         Expression::Array(_) => 200,
+        Expression::VariableExtract(_, _) => 100,
     }
   }
 
@@ -71,6 +74,15 @@ impl Expression {
         Expression::Array(ref list) => {
           // dbg!("is array");
           return Some(format!("[{}:{}]", list[0].data_type(scope)?, list.len()));
+        },
+        Expression::VariableExtract(ref name, _) => {
+          let data_type = &scope.get_variable(name).unwrap().data_type;
+          // For arrays, ignoring structs right now
+          if let DataTypeEnum::Array(ref a, _) = data_type.value {
+            return Some(a.symbol.clone());
+          } else {
+            unimplemented!()
+          }
         },
     };
     None
@@ -186,6 +198,19 @@ impl Statement for Expression {
             AnyValueEnum::MetadataValue(_) => todo!(),
         };
         return Some(Box::new(thing));
+      }
+
+      if let Expression::VariableExtract(ref name, ref slot) = self {
+        dbg!("Doing thing for extract");
+        let ptr = data.variable_table.borrow()[name];
+        let slot_value = slot.visit(data).unwrap().as_any_value_enum().into_int_value();
+        unsafe {
+          let new_location = data.builder.build_gep(ptr, &[data.context.i64_type().const_zero(), slot_value], "__tmp__");
+          let type_changed = data.builder.build_pointer_cast(new_location, data.context.i64_type().ptr_type(AddressSpace::default()), "__tmp");
+
+          let loaded = data.builder.build_load(type_changed, "__tmp__");
+          return Some(Box::new(loaded));
+        }
       }
       None
     }

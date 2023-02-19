@@ -17,7 +17,9 @@ impl ReturnCommand {
 
 impl Statement for ReturnCommand {
     fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        let visited = self.value.visit(data).unwrap().as_any_value_enum();
+        dbg!(&self.value);
+        let raw_visited = self.value.visit(data);
+        let visited = raw_visited.unwrap().as_any_value_enum();
         let basic_value: &dyn BasicValue = (match visited {
             inkwell::values::AnyValueEnum::ArrayValue(ref a) => a,
             inkwell::values::AnyValueEnum::IntValue(ref a) => a,

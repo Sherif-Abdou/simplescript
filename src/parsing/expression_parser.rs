@@ -8,7 +8,8 @@ pub struct ExpressionParser<'a> {
   // top_expression: Option<Expression>,
   expression_stack: VecDeque<Expression>,
   scope_stack: Option<&'a ScopeStack>,
-  parser_stack: VecDeque<ExpressionParser<'a>>
+  parser_stack: VecDeque<ExpressionParser<'a>>,
+  waiting_variable_name: Option<String>
 }
 
 impl<'a> ExpressionParser<'a> {
@@ -17,6 +18,7 @@ impl<'a> ExpressionParser<'a> {
       expression_stack: VecDeque::new(),
       scope_stack: None,
       parser_stack: VecDeque::new(),
+      waiting_variable_name: None,
     }
   }
 
@@ -31,12 +33,17 @@ impl<'a> ExpressionParser<'a> {
       let can_continue = self.parser_stack.front_mut().unwrap().consume(token.clone())?;
       if can_continue {return Ok(true)}
       let sub_expression = self.parser_stack.pop_front().unwrap().build();
+
       match token {
         Token::CloseSquare => {
-          if let Expression::Array(mut arr) = self.expression_stack.pop_front().unwrap() {
+          if let Some(Expression::Array(mut arr)) = self.expression_stack.pop_front() {
             arr.push(sub_expression);
             self.expression_stack.push_front(Expression::Array(arr));
             return Ok(false);
+          } else if let Some(ref name)= self.waiting_variable_name {
+            let new_value = Expression::VariableExtract(name.clone(), Box::new(sub_expression));
+            self.append_expr(new_value);
+            return Ok(true);
           }
         },
         Token::Comma => {
@@ -50,6 +57,8 @@ impl<'a> ExpressionParser<'a> {
       }
       return Ok(true);
     }
+    self.check_variable(&token);
+
     match token {
       Token::Integer(v) => {
         let mini_expr = Expression::IntegerLiteral(v);
@@ -60,16 +69,23 @@ impl<'a> ExpressionParser<'a> {
       Token::Star => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
       Token::Slash => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Division)),
       Token::OpenSquare => {
-        let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
-        self.parser_stack.push_front(new_parser);
-        self.append_expr(Expression::Array(Vec::new()));
+//        dbg!("Open Square reached", &self.expression_stack);
+        if self.expression_stack.is_empty() && self.waiting_variable_name.is_none() {
+          let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
+          self.parser_stack.push_front(new_parser);
+          self.append_expr(Expression::Array(Vec::new()));
+        } else {
+          let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
+          self.parser_stack.push_front(new_parser);
+        }
       },
       Token::Identifier(name) => {
         // dbg!("Looking for variable");
         if let Some(stack) = self.scope_stack {
           if stack.get_variable(&name).is_some() {
             // dbg!("Found it");
-            self.append_expr(Expression::VariableRead(name.clone()));
+            self.waiting_variable_name = Some(name.clone());
+//            self.append_expr(Expression::VariableRead(name.clone()));
             return Ok(true);
           }
         }
@@ -83,7 +99,20 @@ impl<'a> ExpressionParser<'a> {
     Ok(true)
   }
 
+  fn check_variable(&mut self, token: &Token) {
+    if self.waiting_variable_name.is_some() {
+      match token {
+        Token::OpenSquare => {},
+        _ => {
+          self.append_expr(Expression::VariableRead(self.waiting_variable_name.as_ref().unwrap().clone()));
+          self.waiting_variable_name = None;
+        }
+      }
+    }
+  }
+
   pub fn build(&mut self) -> Expression {
+//    dbg!(&self.expression_stack);
     if let Expression::Array(_) = self.expression_stack.front().unwrap() {
       return self.expression_stack.front().unwrap().clone();
     }

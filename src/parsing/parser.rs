@@ -73,8 +73,7 @@ impl Parser {
 
   fn parse_expression(&mut self) -> ParsingResult<Expression> {
     let mut expr_parser = ExpressionParser::with_scope_stack(&self.scope_stack);
-    while self.current_token() != Token::EOL {
-      expr_parser.consume(self.current_token().clone())?;
+    while expr_parser.consume(self.current_token())? {
       self.next();
     }
 

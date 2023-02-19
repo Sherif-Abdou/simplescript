@@ -1,4 +1,5 @@
 use std::{collections::HashMap, cell::RefCell};
+use std::path::Path;
 
 use inkwell::{context::Context, module::Module, execution_engine::JitFunction};
 
@@ -22,6 +23,7 @@ pub fn run(file: String) {
     };
 
     res.visit(&compiler);
+    compiler.module.print_to_file(Path::new("./test/output.txt")).unwrap();
     unsafe {
         let main: JitFunction<MainFunc> = engine.get_function("main").unwrap();
         println!("Result: {}", main.call());
