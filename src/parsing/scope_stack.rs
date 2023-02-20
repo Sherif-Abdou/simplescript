@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use crate::ast::{Scope, Statement};
 
+
 #[derive(Default)]
 pub struct ScopeStack {
     scope_stack: VecDeque<Box<dyn Scope>>,
@@ -14,6 +15,14 @@ impl ScopeStack {
 
     pub fn pop_front(&mut self) -> Option<Box<dyn Scope>> {
         self.scope_stack.pop_front()
+    }
+
+    pub fn peek_front(&mut self) -> Option<&Box<dyn Scope>> {
+        self.scope_stack.front()
+    }
+
+    pub fn peek_front_mut(&mut self) -> Option<&mut Box<dyn Scope>> {
+        self.scope_stack.front_mut()
     }
 }
 
@@ -44,5 +53,9 @@ impl Scope for ScopeStack {
     fn commands_mut(&mut self) -> &mut Vec<Box<dyn crate::ast::Statement>> {
         let front_scope = self.scope_stack.front_mut().unwrap();
         front_scope.commands_mut()
+    }
+
+    fn scope_type(&self) -> &'static str {
+        "scope_stack"
     }
 }

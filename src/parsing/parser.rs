@@ -2,6 +2,8 @@ use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariab
 use std::{collections::{VecDeque, HashMap}, error::Error, fmt::Display, cell::RefCell, ops::IndexMut};
 use inkwell::values::InstructionOpcode::InsertValue;
 use regex::Regex;
+use std::any::{Any, TypeId};
+use crate::ast::{RootScope, Statement};
 use crate::parsing::ParsingError::MissingToken;
 
 use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser};
@@ -38,8 +40,10 @@ impl Parser {
             symbol: "i64".to_string(),
             value: crate::ast::DataTypeEnum::Primitive,
         });
+        let mut scope_stack = ScopeStack::default();
+        scope_stack.push_front(Box::new(RootScope::default()));
         Self {
-            scope_stack: ScopeStack::default(),
+            scope_stack,
             current_token: RefCell::new(lexer.next()),
             lexer: RefCell::new(lexer),
             data_types,
@@ -59,6 +63,9 @@ impl Parser {
                 } else {
                     self.parse_insert_value(expression)?;
                 }
+            } else if Token::ClosedCurly == self.current_token() {
+                let thing = self.scope_stack.pop_front().unwrap();
+                self.scope_stack.peek_front_mut().unwrap().commands_mut().push(thing);
             }
             self.next();
         }

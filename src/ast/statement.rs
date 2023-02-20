@@ -1,5 +1,7 @@
 use inkwell::{module::Module, context::Context, builder::Builder, values::{AnyValue, BasicValue, PointerValue}};
 use std::{collections::HashMap, cell::RefCell};
+use std::any;
+use std::any::Any;
 
 use super::DataType;
 
@@ -11,6 +13,6 @@ pub struct Compiler<'ctx> {
     pub data_types: HashMap<String, DataType>,
 }
 
-pub trait Statement {
+pub trait Statement: Any {
     fn visit<'a>(&'a self, data: &'a Compiler) -> Option<Box<dyn AnyValue + 'a>>;
 }

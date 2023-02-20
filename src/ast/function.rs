@@ -26,6 +26,10 @@ impl Scope for Function {
     fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>> {
         &mut self.commands
     }
+
+    fn scope_type(&self) -> &'static str {
+        "function"
+    }
 }
 
 impl Statement for Function {

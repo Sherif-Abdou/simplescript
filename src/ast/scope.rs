@@ -8,4 +8,5 @@ pub trait Scope: Statement {
     fn set_variable(&mut self, variable: Variable);
     fn commands(&self) -> &Vec<Box<dyn Statement>>;
     fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>>;
+    fn scope_type(&self) -> &'static str;
 }
