@@ -4,18 +4,17 @@ use crate::ast::{Scope, Statement};
 
 #[derive(Default)]
 pub struct ScopeStack {
-  scope_stack: VecDeque<Box<dyn Scope>>
+    scope_stack: VecDeque<Box<dyn Scope>>,
 }
 
 impl ScopeStack {
-  pub fn push_front(&mut self, scope: Box<dyn Scope>) {
-    self.scope_stack.push_front(scope);
-  }
+    pub fn push_front(&mut self, scope: Box<dyn Scope>) {
+        self.scope_stack.push_front(scope);
+    }
 
-  pub fn pop_front(&mut self) -> Option<Box<dyn Scope>> {
-    self.scope_stack.pop_front()
-  }
-
+    pub fn pop_front(&mut self) -> Option<Box<dyn Scope>> {
+        self.scope_stack.pop_front()
+    }
 }
 
 impl Statement for ScopeStack {
@@ -25,21 +24,21 @@ impl Statement for ScopeStack {
 }
 
 impl Scope for ScopeStack {
-    fn commands(&self) -> &Vec<Box<dyn crate::ast::Statement>> {
-        self.scope_stack.front().unwrap().commands()
-    }
-
     fn get_variable(&self, name: &str) -> Option<&crate::ast::Variable> {
         for scope in &self.scope_stack {
-          if scope.get_variable(name).is_some() {
-            return scope.get_variable(name);
-          }
+            if scope.get_variable(name).is_some() {
+                return scope.get_variable(name);
+            }
         }
         None
     }
 
     fn set_variable(&mut self, variable: crate::ast::Variable) {
         self.scope_stack[0].set_variable(variable);
+    }
+
+    fn commands(&self) -> &Vec<Box<dyn crate::ast::Statement>> {
+        self.scope_stack.front().unwrap().commands()
     }
 
     fn commands_mut(&mut self) -> &mut Vec<Box<dyn crate::ast::Statement>> {

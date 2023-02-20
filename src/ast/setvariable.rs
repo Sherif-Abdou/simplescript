@@ -3,19 +3,19 @@ use inkwell::values::AnyValueEnum;
 use super::{Expression, Statement, DataType};
 
 pub struct SetVariable {
-  name: String,
-  data_type: DataType,
-  value: Expression,
+    name: String,
+    data_type: DataType,
+    value: Expression,
 }
 
 impl SetVariable {
-  pub fn new(name: String, data_type: DataType, value: Expression) -> Self {
-    Self {
-      name,
-      data_type,
-      value,
+    pub fn new(name: String, data_type: DataType, value: Expression) -> Self {
+        Self {
+            name,
+            data_type,
+            value,
+        }
     }
-  }
 }
 
 impl Statement for SetVariable {

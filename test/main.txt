@@ -3,5 +3,5 @@ def main() {
     b = 2
     a = 3
     arr = [1, 2, 3]
-    return a * a + b * b
+    return arr[0] * arr[1] * arr[2]
 }

@@ -5,26 +5,26 @@ use super::{Statement, Variable, Scope};
 
 #[derive(Default)]
 pub struct Function {
-  pub commands: Vec<Box<dyn Statement>>,
-  pub variables: HashMap<String, Variable>,
-  pub name: String
+    pub commands: Vec<Box<dyn Statement>>,
+    pub variables: HashMap<String, Variable>,
+    pub name: String,
 }
 
 impl Scope for Function {
     fn commands(&self) -> &Vec<Box<dyn Statement>> {
-      &self.commands
+        &self.commands
     }
 
     fn get_variable(&self, name: &str) -> Option<&Variable> {
-      self.variables.get(name)
+        self.variables.get(name)
     }
 
     fn set_variable(&mut self, variable: Variable) {
-      self.variables.insert(variable.name.clone(), variable);
+        self.variables.insert(variable.name.clone(), variable);
     }
 
     fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>> {
-      &mut self.commands
+        &mut self.commands
     }
 }
 
@@ -34,7 +34,7 @@ impl Statement for Function {
         let block = data.context.append_basic_block(fn_value, "entry");
         data.builder.position_at_end(block);
         for command in &self.commands {
-          command.visit(data);
+            command.visit(data);
         }
         return Some(Box::new(fn_value));
     }
