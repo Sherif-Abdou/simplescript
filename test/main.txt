@@ -3,5 +3,6 @@ def main() {
     b = 2
     a = 3
     arr = [1, 2, 3]
+    arr[0] = arr[1]
     return arr[0] * arr[1] * arr[2]
 }

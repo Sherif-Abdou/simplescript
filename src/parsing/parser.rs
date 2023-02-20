@@ -1,6 +1,8 @@
-use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, Statement, ReturnCommand, Variable, DataType}};
+use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, InsertVariable, ReturnCommand, Variable, DataType}};
 use std::{collections::{VecDeque, HashMap}, error::Error, fmt::Display, cell::RefCell, ops::IndexMut};
+use inkwell::values::InstructionOpcode::InsertValue;
 use regex::Regex;
+use crate::parsing::ParsingError::MissingToken;
 
 use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser};
 
@@ -54,6 +56,8 @@ impl Parser {
                 let expression = self.parse_expression_choice(false).expect("Couldn't parse expected expression");
                 if let Expression::VariableRead(ref iden) = expression {
                     self.parse_set_variable(iden)?;
+                } else {
+                    self.parse_insert_value(expression)?;
                 }
             }
             self.next();
@@ -121,6 +125,17 @@ impl Parser {
         }
         let data_type = self.scope_stack.get_variable(iden).expect("Missing variable").data_type.clone();
         let stmt = SetVariable::new(iden.to_string(), data_type, expr);
+        self.scope_stack.commands_mut().push(Box::new(stmt));
+        Ok(())
+    }
+
+    fn parse_insert_value(&mut self, location: Expression) -> ParsingResult<()> {
+        if self.current_token() != Token::Equal {return Err(Box::new(MissingToken))}
+        self.next();
+
+        let expr = self.parse_expression()?;
+        let stmt = InsertVariable::new(location, expr);
+
         self.scope_stack.commands_mut().push(Box::new(stmt));
         Ok(())
     }
