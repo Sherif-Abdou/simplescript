@@ -6,7 +6,7 @@ use std::any::{Any, TypeId};
 use crate::ast::{RootScope, Statement};
 use crate::parsing::ParsingError::MissingToken;
 
-use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser};
+use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser, data_type_parser::DataTypeParser};
 
 const ARRAY_REGEX: &'static str = r"\[(.*):(\d+)\]";
 
@@ -102,20 +102,30 @@ impl Parser {
     fn parse_set_variable(&mut self, iden: &str) -> ParsingResult<()> {
         let mut val = self.current_token();
         if val == Token::Colon {
-            let data_type_iden = self.next();
-            if let Token::Identifier(ref data_iden) = data_type_iden {
-                let variable = Variable {
-                    name: iden.to_string(),
-                    data_type: self.data_types[data_iden].clone(),
-                };
-                // dbg!("setting variable");
-                self.scope_stack.set_variable(variable);
-                val = self.next()
-            } else {
-                panic!("Missing data type");
+            // let data_type_iden = self.next();
+            // if let Token::Identifier(ref data_iden) = data_type_iden {
+            //     let variable = Variable {
+            //         name: iden.to_string(),
+            //         data_type: self.data_types[data_iden].clone(),
+            //     };
+            //     // dbg!("setting variable");
+            //     self.scope_stack.set_variable(variable);
+            //     val = self.next()
+            // } else {
+            //     panic!("Missing data type");
+            // }
+            let mut data_type_parser = DataTypeParser::new(&self.data_types);
+            while data_type_parser.consume(self.next()) {
             }
+            let data_type = data_type_parser.build();
+            let variable = Variable {
+                name: iden.to_string(),
+                data_type
+            };
+            // dbg!("setting variable");
+            self.scope_stack.set_variable(variable);
         }
-        if val != Token::Equal {
+        if self.current_token() != Token::Equal {
             dbg!("Missing equal");
             dbg!(&self.current_token());
             return Err(Box::new(ParsingError::MissingToken));
