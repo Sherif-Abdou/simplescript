@@ -44,12 +44,14 @@ impl<'a> ExpressionParser<'a> {
                         let Some(Expression::Array(mut arr)) = self.expression_stack.pop_front() else {
                             panic!();
                         };
-                        arr.push(sub_expression);
+                        if sub_expression.is_some() {
+                            arr.push(sub_expression.unwrap());
+                        }
                         self.expression_stack.push_front(Expression::Array(arr));
                         return Ok(false);
                     } else if let Some(ref name) = self.waiting_variable_name {
                         // dbg!(&self.expression_stack, &sub_expression);
-                        let new_value = Expression::VariableExtract(name.clone(), Box::new(sub_expression));
+                        let new_value = Expression::VariableExtract(name.clone(), Box::new(sub_expression.unwrap()));
                         self.waiting_variable_name = None;
                         // dbg!(&self.expression_stack);
                         self.append_expr(new_value);
@@ -59,7 +61,7 @@ impl<'a> ExpressionParser<'a> {
                 }
                 Token::Comma => {
                     if let Expression::Array(mut arr) = self.expression_stack.pop_front().unwrap() {
-                        arr.push(sub_expression);
+                        arr.push(sub_expression.unwrap());
                         self.expression_stack.push_front(Expression::Array(arr));
                         self.parser_stack.push_front(ExpressionParser::with_scope_stack(&self.scope_stack.unwrap()));
                     }
@@ -129,10 +131,10 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    pub fn build(&mut self) -> Expression {
+    pub fn build(&mut self) -> Option<Expression> {
         // dbg!(&self.expression_stack);
-        if let Expression::Array(_) = self.expression_stack.front().unwrap() {
-            return self.expression_stack.front().unwrap().clone();
+        if let Expression::Array(_) = self.expression_stack.front()? {
+            return Some(self.expression_stack.front()?.clone());
         }
         let mut current = self.expression_stack.pop_front();
         while !self.expression_stack.is_empty() {
@@ -142,7 +144,7 @@ impl<'a> ExpressionParser<'a> {
             current = self.expression_stack.pop_front();
         }
 
-        return current.unwrap();
+        return Some(current.unwrap());
     }
 
     fn append_expr(&mut self, expression: Expression) {
@@ -220,7 +222,7 @@ mod test {
         let mut expression_parser = ExpressionParser::new();
 
         expression_parser.consume(number).expect("Some error");
-        let expr = expression_parser.build();
+        let expr = expression_parser.build().unwrap();
 
         assert_eq!(expr, Expression::IntegerLiteral(24));
     }
@@ -234,7 +236,7 @@ mod test {
             expression_parser.consume(value).expect("Some Error");
         }
 
-        let expr = expression_parser.build();
+        let expr = expression_parser.build().unwrap();
         assert_eq!(expr, Binary(Some(Box::new(IntegerLiteral(24))), Some(Box::new(IntegerLiteral(7))), Addition))
     }
 

@@ -164,6 +164,9 @@ impl Statement for Expression {
         }
         if let Expression::Array(ref values) = self {
             let expressions: Vec<Box<dyn AnyValue>> = values.iter().map(|v| v.visit(data)).flatten().collect();
+            if expressions.is_empty() {
+                return None;
+            }
             let thing: ArrayValue = match expressions[0].as_any_value_enum() {
                 AnyValueEnum::ArrayValue(ref v) => {
                     let mapped: Vec<ArrayValue> = expressions.iter().map(|v| v.as_any_value_enum().into_array_value()).collect();

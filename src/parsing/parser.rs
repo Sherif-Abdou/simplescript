@@ -96,7 +96,7 @@ impl Parser {
             self.next();
         }
 
-        Ok(expr_parser.build())
+        Ok(expr_parser.build().unwrap())
     }
 
     fn parse_set_variable(&mut self, iden: &str) -> ParsingResult<()> {

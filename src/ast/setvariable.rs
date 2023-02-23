@@ -25,7 +25,9 @@ impl Statement for SetVariable {
             let allocation = data.builder.build_alloca(data_type.as_basic_type_enum(), &self.name);
             data.variable_table.borrow_mut().insert(self.name.clone(), allocation);
         }
-        let value = self.value.visit(data).unwrap();
+        let Some(value) = self.value.visit(data) else {
+            return None;
+        };
         let borrowed = data.variable_table.borrow();
         let allocation = borrowed.get(&self.name).unwrap();
         let e = value.as_any_value_enum();
