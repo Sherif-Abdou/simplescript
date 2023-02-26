@@ -59,13 +59,13 @@ impl Statement for Function {
         data.current_function_params.swap(&rfcell);
         let block = data.context.append_basic_block(fn_value, "entry");
         data.builder.position_at_end(block);
+        data.function_table.borrow_mut().insert(self.name.clone(), fn_value);
         for command in &self.commands {
             command.visit(data);
         }
         for name in self.variables.keys() {
             data.variable_table.borrow_mut().remove(name);
         }
-        data.function_table.borrow_mut().insert(self.name.clone(), fn_value);
         return Some(Box::new(fn_value));
     }
 }

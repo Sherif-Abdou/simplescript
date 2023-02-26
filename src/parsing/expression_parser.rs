@@ -43,8 +43,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
-        // dbg!(&self.expression_stack);
-        dbg!(&token);
+        // dbg!(&token);
         if let Some(ref mut parser) = self.waiting_function_parser {
             // dbg!("started parsing function with token");
             // dbg!(&token);
@@ -136,7 +135,6 @@ impl<'a> ExpressionParser<'a> {
                 }
                 if let Some(stack) = self.scope_stack {
                     if stack.get_variable(&name).is_some() {
-                        // dbg!("Found it");
                         self.waiting_variable_name = Some(name.clone());
 //            self.append_expr(Expression::VariableRead(name.clone()));
                         return Ok(true);
@@ -152,6 +150,8 @@ impl<'a> ExpressionParser<'a> {
             Token::Colon => return Ok(false),
             Token::CloseParenth => return Ok(false),
             Token::CloseSquare => return Ok(false),
+            Token::ClosedCurly => return Ok(false),
+            Token::OpenCurly => return Ok(false),
             Token::Equal => return Ok(false),
             _ => panic!("Didn't expect {:?}", token)
         };
@@ -189,7 +189,7 @@ impl<'a> ExpressionParser<'a> {
 
     fn append_expr(&mut self, expression: Expression) {
         self.was_last_binary = expression.is_binary();
-       if self.waiting_unary_operation.is_some() {
+        if self.waiting_unary_operation.is_some() {
             // dbg!("unary thing");
             let new_expression = match self.waiting_unary_operation.as_ref().unwrap() {
                 WaitingUnaryTypes::Reference => Expression::Unary(Some(Box::new(expression)), UnaryExpressionType::Reference),

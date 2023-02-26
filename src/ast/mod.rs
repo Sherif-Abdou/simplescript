@@ -8,6 +8,7 @@ mod function;
 mod return_command;
 mod datatype;
 mod root_scope;
+mod ifcondition;
 
 pub use statement::*;
 pub use expression::*;
@@ -19,3 +20,4 @@ pub use return_command::*;
 pub use datatype::*;
 pub use insertvariable::*;
 pub use root_scope::*;
+pub use ifcondition::*;

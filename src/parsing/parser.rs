@@ -1,4 +1,4 @@
-use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, InsertVariable, ReturnCommand, Variable, DataType}};
+use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, InsertVariable, ReturnCommand, Variable, DataType, IfCondition}};
 use std::{collections::{HashMap}, error::Error, fmt::Display, cell::RefCell};
 use crate::ast::{RootScope};
 use crate::parsing::ParsingError::MissingToken;
@@ -53,7 +53,7 @@ impl Parser {
             } else if self.current_token() == Token::Return {
                 self.parse_return()?;
             } else if self.current_token() == Token::If {
-                
+                self.parse_if_statement()?;
             } else if let Token::Identifier(ref name) = self.current_token() {
                 let expression = self.parse_expression_choice(false).expect("Couldn't parse expected expression");
                 if let Expression::VariableRead(ref iden) = expression {
@@ -66,13 +66,34 @@ impl Parser {
                 // dbg!(&expression);
                 self.parse_insert_value(expression)?;
             } else if Token::ClosedCurly == self.current_token() {
-                let thing = self.scope_stack.pop_front().unwrap();
+                let mut thing = self.scope_stack.pop_front().unwrap();
+                thing.wrap_up_parsing(self);
                 self.scope_stack.peek_front_mut().unwrap().commands_mut().push(thing);
             }
             self.next();
         }
 
         Ok(self.scope_stack.pop_front().unwrap())
+    }
+
+    fn parse_if_statement(&mut self) -> ParsingResult<()> {
+        if self.current_token() != Token::If {
+            return Err(Box::new(MissingToken))
+        }
+        let mut token = self.next();
+        let mut expression_parser = ExpressionParser::with_scope_stack(&self.scope_stack);
+        while expression_parser.consume(token)? {
+            token = self.next();
+        }
+        let condition = expression_parser.build().unwrap();
+        // dbg!(&condition);
+        if self.current_token() != Token::OpenCurly {
+            return Err(Box::new(MissingToken))
+        }
+
+        let condition = IfCondition::new(condition);
+        self.scope_stack.push_front(Box::new(condition));
+        Ok(())
     }
 
     fn parse_return(&mut self) -> ParsingResult<()> {

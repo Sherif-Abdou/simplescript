@@ -1,3 +1,5 @@
+use crate::parsing::Parser;
+
 use super::{variable::Variable, Statement};
 
 
@@ -9,4 +11,5 @@ pub trait Scope: Statement {
     fn contains_function(&self, name: &str) -> bool;
     fn add_function(&mut self, name: &str);
     fn scope_type(&self) -> &'static str;
+    fn wrap_up_parsing(&mut self, parser: &mut Parser) {}
 }
