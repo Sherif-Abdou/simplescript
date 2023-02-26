@@ -1,8 +1,14 @@
+def thing() {
+    return 9
+}
+
+def double(a: &i64) {
+    a = *a * 2
+    return *a * 2
+}
+
 def main() {
-    a: i64 = 1
-    b = 2
-    a = 3
-    arr = [1, 2, 3]
-    arr[0] = arr[1]
-    return arr[0] * arr[1] * arr[2]
+    a = 2
+    d = double(&a)
+    return a
 }

@@ -62,6 +62,9 @@ impl Statement for Function {
         for command in &self.commands {
             command.visit(data);
         }
+        for name in self.variables.keys() {
+            data.variable_table.borrow_mut().remove(name);
+        }
         data.function_table.borrow_mut().insert(self.name.clone(), fn_value);
         return Some(Box::new(fn_value));
     }

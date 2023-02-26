@@ -159,12 +159,17 @@ impl Expression {
         }
 
         if let Expression::VariableRead(variable_name) = self {
+            if let Some(p) = data.current_function_params.borrow().get(variable_name) {
+                dbg!("converting p hopefully", p.is_pointer_value());
+                return Some(p.into_pointer_value());
+            }
             let ptr = data.variable_table.borrow()[variable_name];
             return Some(ptr);
         }
 
         if let Expression::Unary(Some(ref interior), UnaryExpressionType::Dereference) = self {
             let dereference = data.builder.build_load(interior.expression_location(data).unwrap(), "__tmp__");
+            dbg!(&dereference);
             let as_ptr_type = dereference.into_pointer_value();
 
             return Some(as_ptr_type);
