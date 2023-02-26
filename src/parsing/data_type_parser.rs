@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
-use crate::{ast::{DataType, DataTypeEnum}, lexing::Token};
+use crate::{ast::{DataType, DataTypeEnum}, lexing::{Token, Lexer}};
 
 enum BuildType {
     Array,
@@ -22,7 +22,22 @@ impl<'a> DataTypeParser<'a> {
         }
     }
 
+    pub fn parse_string(&mut self, string: String) -> DataType {
+        let mut lexer = Lexer::new(string);
+        let mut token = lexer.next();
+        // dbg!(&token);
+        while self.consume(token) {
+            token = lexer.next();
+        }
+
+        self.build()
+    }
+
     pub fn consume(&mut self, token: Token) -> bool {
+        // dbg!(&token);
+        // if token == Token::EOF {
+            // dbg!(&self.internal_type);
+        // }
         match token {
             Token::OpenSquare => {
                 if self.build_type.is_none() {
@@ -32,6 +47,12 @@ impl<'a> DataTypeParser<'a> {
             Token::Identifier(iden) => {
                 // dbg!(&iden);
                 self.internal_type = Some(self.data_types[&iden].clone());
+                if let Some(BuildType::Reference) = &self.build_type {
+                    self.internal_type = Some(DataType {
+                        symbol: format!("&{}", self.internal_type.as_ref().unwrap().symbol),
+                        value: DataTypeEnum::Pointer(Box::new(self.internal_type.as_ref().unwrap().clone())),
+                    });
+                }
             },
             Token::Colon => {
 
@@ -45,12 +66,16 @@ impl<'a> DataTypeParser<'a> {
 
                 self.internal_type = Some(new_data_type);
             },
+            Token::Ampersand => {
+                self.build_type = Some(BuildType::Reference)  
+            },
             Token::CloseSquare => return true,
             Token::EOL => return false,
+            Token::EOF => return false,
             Token::Comma => return false,
             Token::Equal => return false,
             Token::CloseParenth => return false,
-            _ => panic!("Unexpected token")
+            _ => return true,
         }
 
         true
@@ -58,7 +83,6 @@ impl<'a> DataTypeParser<'a> {
 
     pub fn build(&mut self) -> DataType {
         let thing = self.internal_type.as_ref().unwrap().clone();
-
         thing
     }
 }

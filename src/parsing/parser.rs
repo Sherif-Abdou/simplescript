@@ -63,6 +63,10 @@ impl Parser {
                 } else {
                     self.parse_insert_value(expression)?;
                 }
+            } else if self.current_token() == Token::Star {
+                let expression = self.parse_expression_choice(false).expect("Couldn't parse expected expression");
+                // dbg!(&expression);
+                self.parse_insert_value(expression)?;
             } else if Token::ClosedCurly == self.current_token() {
                 let thing = self.scope_stack.pop_front().unwrap();
                 self.scope_stack.peek_front_mut().unwrap().commands_mut().push(thing);
@@ -158,19 +162,23 @@ impl Parser {
     }
 
     fn expression_type(&mut self, expr: &Expression) -> DataType {
-        let symbol = expr.data_type(&self.scope_stack).expect("Can't infer data type").to_string();
-        let re = Regex::new(ARRAY_REGEX).unwrap();
-        if let Some(captures) = re.captures(&symbol) {
-            let interior_type = captures.get(1).unwrap().as_str();
-            let count: u64 = captures.get(2).unwrap().as_str().parse().unwrap();
-            let data_type = DataType {
-                symbol: symbol.clone(),
-                value: crate::ast::DataTypeEnum::Array(Box::new(self.data_types[interior_type].clone()), count),
-            };
-            self.data_types.insert(symbol.clone(), data_type.clone());
-            return data_type;
-        }
-        self.data_types[&symbol].clone()
+        // let symbol = expr.data_type(&self.scope_stack).expect("Can't infer data type").to_string();
+        // let re = Regex::new(ARRAY_REGEX).unwrap();
+        // if let Some(captures) = re.captures(&symbol) {
+        //     let interior_type = captures.get(1).unwrap().as_str();
+        //     let count: u64 = captures.get(2).unwrap().as_str().parse().unwrap();
+        //     let data_type = DataType {
+        //         symbol: symbol.clone(),
+        //         value: crate::ast::DataTypeEnum::Array(Box::new(self.data_types[interior_type].clone()), count),
+        //     };
+        //     self.data_types.insert(symbol.clone(), data_type.clone());
+        //     return data_type;
+        // }
+        let mut data_type_parser = DataTypeParser::new(&self.data_types);
+        let thing = expr.data_type(&self.scope_stack).unwrap();
+        // dbg!(&thing);
+        let data_type = data_type_parser.parse_string(thing);
+        data_type
     }
 
     fn parse_function(&mut self) -> ParsingResult<()> {

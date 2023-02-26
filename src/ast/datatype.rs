@@ -7,7 +7,7 @@ use super::Compiler;
 type DataTypeVector = Vec<Box<DataType>>;
 type NameMap = HashMap<String, u64>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DataTypeEnum {
     Primitive,
     Array(Box<DataType>, u64),
@@ -15,7 +15,7 @@ pub enum DataTypeEnum {
     Pointer(Box<DataType>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DataType {
     pub symbol: String,
     pub value: DataTypeEnum,

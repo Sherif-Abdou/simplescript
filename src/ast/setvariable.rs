@@ -34,10 +34,10 @@ impl Statement for SetVariable {
         let res = match e {
             AnyValueEnum::ArrayValue(a) => data.builder.build_store(*allocation, a),
             AnyValueEnum::IntValue(a) => data.builder.build_store(*allocation, a),
-            AnyValueEnum::FloatValue(a) => data.builder.build_store(data.builder.build_alloca(data.context.i64_type(), &self.name), a),
-            AnyValueEnum::PointerValue(a) => data.builder.build_store(data.builder.build_alloca(data.context.i64_type(), &self.name), a),
-            AnyValueEnum::StructValue(a) => data.builder.build_store(data.builder.build_alloca(data.context.i64_type(), &self.name), a),
-            AnyValueEnum::VectorValue(a) => data.builder.build_store(data.builder.build_alloca(data.context.i64_type(), &self.name), a),
+            AnyValueEnum::FloatValue(a) => data.builder.build_store(*allocation, a),
+            AnyValueEnum::PointerValue(a) => data.builder.build_store(*allocation, a),
+            AnyValueEnum::StructValue(a) => data.builder.build_store(*allocation, a),
+            AnyValueEnum::VectorValue(a) => data.builder.build_store(*allocation, a),
             _ => unimplemented!()
         };
 

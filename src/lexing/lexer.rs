@@ -20,10 +20,13 @@ impl Lexer {
             return Token::EOF;
         }
         let mut current_string = String::new();
-        let mut current: char = self.peek();
+        let mut current: char = self.peek().unwrap();
         while current.is_whitespace() && current != '\n' && !self.empty() {
             self.pop();
-            current = self.peek();
+            if self.peek().is_none() {
+                break;
+            }
+            current = self.peek().unwrap();
         }
         if current == '\n' {
             self.pop();
@@ -39,6 +42,7 @@ impl Lexer {
             ')' => Some(Token::CloseParenth),
             '{' => Some(Token::OpenCurly),
             '}' => Some(Token::ClosedCurly),
+            '&' => Some(Token::Ampersand),
             '=' => Some(Token::Equal),
             ':' => Some(Token::Colon),
             '[' => Some(Token::OpenSquare),
@@ -55,7 +59,10 @@ impl Lexer {
         if current.is_numeric() {
             while current.is_numeric() && !self.empty() {
                 current_string.push(self.pop());
-                current = self.peek();
+                if self.peek().is_none() {
+                    break;
+                }
+                current = self.peek().unwrap();
             }
             return Token::Integer(current_string.parse().unwrap());
         }
@@ -63,7 +70,10 @@ impl Lexer {
         if current.is_alphabetic() {
             while current.is_alphanumeric() && !self.empty() {
                 current_string.push(self.pop());
-                current = self.peek();
+                if self.peek().is_none() {
+                    break;
+                }
+                current = self.peek().unwrap();
             }
             return match current_string.as_str() {
                 "def" => Token::Def,
@@ -78,8 +88,8 @@ impl Lexer {
         self.raw_text.remove(0)
     }
 
-    fn peek(&self) -> char {
-        self.raw_text.chars().next().unwrap()
+    fn peek(&self) -> Option<char> {
+        self.raw_text.chars().next()
     }
 }
 

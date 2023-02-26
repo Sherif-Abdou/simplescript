@@ -1,7 +1,7 @@
 use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue}, types::BasicType, AddressSpace};
 use inkwell::types::AnyTypeEnum::IntType;
 
-use super::{statement::Statement, DataType, Scope, DataTypeEnum};
+use super::{statement::Statement, DataType, Scope, DataTypeEnum, Compiler};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expression {
@@ -68,7 +68,13 @@ impl Expression {
                 }
                 return None;
             }
-            Expression::Unary(_, _) => todo!(),
+            Expression::Unary(Some(interior), dt) => {
+                let thing = match dt {
+                    UnaryExpressionType::Reference => format!("&{}", interior.data_type(scope).unwrap()),
+                    UnaryExpressionType::Dereference => interior.data_type(scope).unwrap()[1..].to_string(),
+                };
+                return Some(thing);
+            },
             Expression::VariableRead(v) => return Some(scope.get_variable(v).unwrap().data_type.symbol.clone()),
             Expression::IntegerLiteral(_) => return Some("i64".to_string()),
             Expression::Array(ref list) => {
@@ -83,7 +89,8 @@ impl Expression {
                 } else {
                     unimplemented!()
                 }
-            }
+            },
+            _ => unimplemented!()
         };
         None
     }
@@ -130,6 +137,34 @@ impl Expression {
 
         new_expression
     }
+
+    pub fn expression_location<'a>(&'a self, data: &'a Compiler) -> Option<PointerValue<'a>> {
+        if let Expression::VariableExtract(ref name, ref slot) = self {
+            // dbg!("Doing thing for extract");
+            let ptr = data.variable_table.borrow()[name];
+            let slot_value = slot.visit(data).unwrap().as_any_value_enum().into_int_value();
+            unsafe {
+                let new_location = data.builder.build_gep(ptr, &[data.context.i64_type().const_zero(), slot_value], "__tmp__");
+                let type_changed = data.builder.build_pointer_cast(new_location, data.context.i64_type().ptr_type(AddressSpace::default()), "__tmp__");
+
+                return Some(type_changed);
+            }
+        }
+
+        if let Expression::VariableRead(variable_name) = self {
+            let ptr = data.variable_table.borrow()[variable_name];
+            return Some(ptr);
+        }
+
+        if let Expression::Unary(Some(ref interior), UnaryExpressionType::Dereference) = self {
+            let dereference = data.builder.build_load(interior.expression_location(data).unwrap(), "__tmp__");
+            let as_ptr_type = dereference.into_pointer_value();
+
+            return Some(as_ptr_type);
+        }
+
+        None
+    }
 }
 
 impl Statement for Expression {
@@ -150,9 +185,21 @@ impl Statement for Expression {
             }
         }
 
+        if let Expression::Unary(Some(interior), operation) = self {
+            match operation {
+                UnaryExpressionType::Reference => {
+                    return Some(Box::new(interior.expression_location(data).unwrap()));
+                },
+                UnaryExpressionType::Dereference => {
+                    let location = interior.visit(data).unwrap().as_any_value_enum().into_pointer_value();
+                    return Some(Box::new(data.builder.build_load(location, "__tmp__")));
+                },
+            } 
+        };
+
 
         if let Expression::VariableRead(variable_name) = self {
-            let load = data.builder.build_load(data.variable_table.borrow()[variable_name], variable_name);
+            let load = data.builder.build_load(self.expression_location(data).unwrap(), variable_name);
             return Some(Box::new(load));
         }
 
@@ -202,17 +249,11 @@ impl Statement for Expression {
             return Some(Box::new(thing));
         }
 
-        if let Expression::VariableExtract(ref name, ref slot) = self {
+        if let Expression::VariableExtract(_, _) = self {
             // dbg!("Doing thing for extract");
-            let ptr = data.variable_table.borrow()[name];
-            let slot_value = slot.visit(data).unwrap().as_any_value_enum().into_int_value();
-            unsafe {
-                let new_location = data.builder.build_gep(ptr, &[data.context.i64_type().const_zero(), slot_value], "__tmp__");
-                let type_changed = data.builder.build_pointer_cast(new_location, data.context.i64_type().ptr_type(AddressSpace::default()), "__tmp");
+            let location = self.expression_location(data).unwrap();
 
-                let loaded = data.builder.build_load(type_changed, "__tmp__");
-                return Some(Box::new(loaded));
-            }
+            return Some(Box::new(data.builder.build_load(location, "__tmp__")));
         }
         None
     }

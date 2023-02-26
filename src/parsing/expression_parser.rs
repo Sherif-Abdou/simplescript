@@ -1,8 +1,14 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, f32::consts::E};
 
-use crate::{lexing::Token, ast::{Expression, Scope}};
+use crate::{lexing::Token, ast::{Expression, Scope, UnaryExpressionType}};
 
 use super::{parser::{ParsingResult}, scope_stack::ScopeStack};
+
+enum WaitingUnaryTypes {
+    Reference,
+    Dereference,
+    Negation,
+}
 
 pub struct ExpressionParser<'a> {
     // top_expression: Option<Expression>,
@@ -10,6 +16,8 @@ pub struct ExpressionParser<'a> {
     scope_stack: Option<&'a ScopeStack>,
     parser_stack: VecDeque<ExpressionParser<'a>>,
     waiting_variable_name: Option<String>,
+    waiting_unary_operation: Option<WaitingUnaryTypes>, 
+    was_last_binary: bool,
     pub check_stack: bool,
 }
 
@@ -20,6 +28,8 @@ impl<'a> ExpressionParser<'a> {
             scope_stack: None,
             parser_stack: VecDeque::new(),
             waiting_variable_name: None,
+            waiting_unary_operation: None,
+            was_last_binary: false,
             check_stack: true,
         }
     }
@@ -72,14 +82,20 @@ impl<'a> ExpressionParser<'a> {
         }
         self.check_variable(&token);
 
+        let unary_mode = self.was_last_binary || self.expression_stack.is_empty();
+        // dbg!(&unary_mode, &token);
+
         match token {
             Token::Integer(v) => {
                 let mini_expr = Expression::IntegerLiteral(v);
                 self.append_expr(mini_expr);
             }
             Token::Plus => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Addition)),
-            Token::Minus => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Subtraction)),
-            Token::Star => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
+            Token::Minus if !unary_mode => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Subtraction)),
+            Token::Star if !unary_mode => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
+            Token::Star if unary_mode => self.waiting_unary_operation = Some(WaitingUnaryTypes::Dereference),
+            Token::Ampersand if unary_mode => self.waiting_unary_operation = Some(WaitingUnaryTypes::Reference),
+            Token::Minus if unary_mode => self.waiting_unary_operation = Some(WaitingUnaryTypes::Negation),
             Token::Slash => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Division)),
             Token::OpenSquare => {
 //        dbg!("Open Square reached", &self.expression_stack);
@@ -148,11 +164,23 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn append_expr(&mut self, expression: Expression) {
+        self.was_last_binary = expression.is_binary();
+       if self.waiting_unary_operation.is_some() {
+            // dbg!("unary thing");
+            let new_expression = match self.waiting_unary_operation.as_ref().unwrap() {
+                WaitingUnaryTypes::Reference => Expression::Unary(Some(Box::new(expression)), UnaryExpressionType::Reference),
+                WaitingUnaryTypes::Dereference => Expression::Unary(Some(Box::new(expression)), UnaryExpressionType::Dereference),
+                WaitingUnaryTypes::Negation => todo!(),
+            };
+            self.waiting_unary_operation = None;
+            return self.append_expr(new_expression);
+        }
+
         if self.expression_stack.is_empty() {
             self.expression_stack.push_front(expression);
             return;
         }
-
+ 
         if self.front().is_binary() {
             if !self.binary_left() {
                 self.binary_set_left(Some(expression));
