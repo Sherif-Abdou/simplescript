@@ -21,6 +21,8 @@ pub enum Token {
     LesserEqual,
     DoubleEqual,
     NotEqual,
+    If,
+    Else,
     Equal,
     Colon,
     Comma,

@@ -52,6 +52,8 @@ impl Parser {
                 self.parse_function()?
             } else if self.current_token() == Token::Return {
                 self.parse_return()?;
+            } else if self.current_token() == Token::If {
+                
             } else if let Token::Identifier(ref name) = self.current_token() {
                 let expression = self.parse_expression_choice(false).expect("Couldn't parse expected expression");
                 if let Expression::VariableRead(ref iden) = expression {
