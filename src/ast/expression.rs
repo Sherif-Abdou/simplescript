@@ -1,12 +1,13 @@
 use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue}, types::BasicType, AddressSpace};
-use inkwell::types::AnyTypeEnum::IntType;
 
-use super::{statement::Statement, DataType, Scope, DataTypeEnum, Compiler};
+
+use super::{statement::Statement, Scope, DataTypeEnum, Compiler};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expression {
     Binary(Option<Box<Expression>>, Option<Box<Expression>>, BinaryExpressionType),
     Unary(Option<Box<Expression>>, UnaryExpressionType),
+    FunctionCall(String, Vec<Box<Expression>>),
     Array(Vec<Expression>),
     VariableRead(String),
     VariableExtract(String, Box<Expression>),
@@ -57,6 +58,7 @@ impl Expression {
             Expression::IntegerLiteral(_) => 100,
             Expression::Array(_) => 200,
             Expression::VariableExtract(_, _) => 100,
+            Expression::FunctionCall(_, _) => 100,
         }
     }
 
@@ -254,6 +256,15 @@ impl Statement for Expression {
             let location = self.expression_location(data).unwrap();
 
             return Some(Box::new(data.builder.build_load(location, "__tmp__")));
+        }
+
+        if let Expression::FunctionCall(name, args) = self {
+            let function = data.function_table.borrow()[name];
+            let call_output = data.builder.build_call(function, &[], "__tmp__").try_as_basic_value();
+            if let Some(call_value) = call_output.left() {
+                let as_any = call_value.as_any_value_enum();
+                return Some(Box::new(as_any));
+            }
         }
         None
     }

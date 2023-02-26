@@ -209,6 +209,7 @@ impl Parser {
         };
 
         let mut function = Function::default();
+        self.scope_stack.add_function(&func_name);
         function.name = func_name.to_string();
         self.scope_stack.push_front(Box::new(function));
 

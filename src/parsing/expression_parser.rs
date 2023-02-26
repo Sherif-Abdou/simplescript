@@ -2,7 +2,7 @@ use std::{collections::VecDeque, f32::consts::E};
 
 use crate::{lexing::Token, ast::{Expression, Scope, UnaryExpressionType}};
 
-use super::{parser::{ParsingResult}, scope_stack::ScopeStack};
+use super::{parser::{ParsingResult}, scope_stack::ScopeStack, function_call_parser::FunctionCallParser};
 
 enum WaitingUnaryTypes {
     Reference,
@@ -17,6 +17,7 @@ pub struct ExpressionParser<'a> {
     parser_stack: VecDeque<ExpressionParser<'a>>,
     waiting_variable_name: Option<String>,
     waiting_unary_operation: Option<WaitingUnaryTypes>, 
+    waiting_function_parser: Option<Box<FunctionCallParser<'a>>>,
     was_last_binary: bool,
     pub check_stack: bool,
 }
@@ -29,6 +30,7 @@ impl<'a> ExpressionParser<'a> {
             parser_stack: VecDeque::new(),
             waiting_variable_name: None,
             waiting_unary_operation: None,
+            waiting_function_parser: None,
             was_last_binary: false,
             check_stack: true,
         }
@@ -42,6 +44,16 @@ impl<'a> ExpressionParser<'a> {
 
     pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
         // dbg!(&self.expression_stack);
+        if let Some(ref mut parser) = self.waiting_function_parser {
+            // dbg!("started parsing function with token");
+            // dbg!(&token);
+            if !parser.consume(token)? {
+                let built = parser.build();
+                self.append_expr(built);
+                self.waiting_function_parser = None;
+            }
+            return Ok(true);
+        }
         if !self.parser_stack.is_empty() {
             let can_continue = self.parser_stack.front_mut().unwrap().consume(token.clone())?;
             if can_continue { return Ok(true); }
@@ -121,12 +133,17 @@ impl<'a> ExpressionParser<'a> {
                         self.waiting_variable_name = Some(name.clone());
 //            self.append_expr(Expression::VariableRead(name.clone()));
                         return Ok(true);
+                    } else if stack.contains_function(&name) {
+                        let mut function_parser = Box::new(FunctionCallParser::new(stack));
+                        function_parser.consume(Token::Identifier(name.clone()))?;
+                        self.waiting_function_parser = Some(function_parser);
                     }
                 }
             }
             Token::EOL => return Ok(false),
             Token::Comma => return Ok(false),
             Token::Colon => return Ok(false),
+            Token::CloseParenth => return Ok(false),
             Token::CloseSquare => return Ok(false),
             Token::Equal => return Ok(false),
             _ => panic!("Didn't expect {:?}", token)

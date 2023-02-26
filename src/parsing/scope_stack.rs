@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, borrow::BorrowMut};
 
 use crate::ast::{Scope, Statement};
 
@@ -57,5 +57,18 @@ impl Scope for ScopeStack {
 
     fn scope_type(&self) -> &'static str {
         "scope_stack"
+    }
+
+    fn contains_function(&self, name: &str) -> bool {
+        for scope in &self.scope_stack {
+            if scope.contains_function(name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn add_function(&mut self, name: &str) {
+        self.scope_stack.front_mut().unwrap().add_function(name);
     }
 }

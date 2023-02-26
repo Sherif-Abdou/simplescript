@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashSet};
 use std::collections::HashMap;
 use inkwell::values::AnyValue;
 use crate::ast::{Compiler, Scope, Statement, Variable};
@@ -7,6 +7,7 @@ use crate::ast::{Compiler, Scope, Statement, Variable};
 pub struct RootScope {
     pub commands: Vec<Box<dyn Statement>>,
     pub variables: HashMap<String, Variable>,
+    pub functions: HashSet<String>,
     pub name: String,
 }
 
@@ -39,5 +40,13 @@ impl Scope for RootScope {
 
     fn scope_type(&self) -> &'static str {
         "root"
+    }
+
+    fn contains_function(&self, name: &str) -> bool {
+        self.functions.contains(name)
+    }
+
+    fn add_function(&mut self, name: &str) {
+        self.functions.insert(name.to_owned());
     }
 }

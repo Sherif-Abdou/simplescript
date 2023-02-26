@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::{collections::{HashMap, HashSet}};
 
 use super::{Statement, Variable, Scope};
 
@@ -7,6 +7,7 @@ use super::{Statement, Variable, Scope};
 pub struct Function {
     pub commands: Vec<Box<dyn Statement>>,
     pub variables: HashMap<String, Variable>,
+    pub functions: HashSet<String>,
     pub name: String,
 }
 
@@ -30,6 +31,14 @@ impl Scope for Function {
     fn scope_type(&self) -> &'static str {
         "function"
     }
+
+    fn contains_function(&self, name: &str) -> bool {
+        self.functions.contains(name)
+    }
+
+    fn add_function(&mut self, name: &str) {
+        self.functions.insert(name.to_owned());
+    }
 }
 
 impl Statement for Function {
@@ -40,6 +49,7 @@ impl Statement for Function {
         for command in &self.commands {
             command.visit(data);
         }
+        data.function_table.borrow_mut().insert(self.name.clone(), fn_value);
         return Some(Box::new(fn_value));
     }
 }

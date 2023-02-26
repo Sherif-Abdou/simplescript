@@ -19,6 +19,7 @@ pub fn run(file: String) {
         module,
         builder: context.create_builder(),
         variable_table: RefCell::new(HashMap::new()),
+        function_table: RefCell::new(HashMap::new()),
         data_types: parser.data_types.clone(),
     };
 
