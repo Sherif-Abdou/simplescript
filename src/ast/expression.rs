@@ -1,4 +1,4 @@
-use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue, BasicValue, BasicValueEnum, BasicMetadataValueEnum}, types::BasicType, AddressSpace};
+use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue, BasicValue, BasicValueEnum, BasicMetadataValueEnum}, types::BasicType, AddressSpace, IntPredicate};
 
 
 use super::{statement::Statement, Scope, DataTypeEnum, Compiler};
@@ -20,6 +20,12 @@ pub enum BinaryExpressionType {
     Subtraction,
     Multiplication,
     Division,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
 }
 
 impl BinaryExpressionType {
@@ -30,6 +36,7 @@ impl BinaryExpressionType {
             BinaryExpressionType::Subtraction => 1,
             BinaryExpressionType::Multiplication => 2,
             BinaryExpressionType::Division => 2,
+            _ => 0,
         }
     }
 }
@@ -190,6 +197,18 @@ impl Statement for Expression {
                     BinaryExpressionType::Subtraction => data.builder.build_int_sub(int_left, int_right, "__tmp__"),
                     BinaryExpressionType::Multiplication => data.builder.build_int_mul(int_left, int_right, "__tmp__"),
                     BinaryExpressionType::Division => data.builder.build_int_signed_div(int_left, int_right, "__tmp__"),
+                    _ => {
+                        let predicate = match binary_type {
+                            BinaryExpressionType::Equal => IntPredicate::EQ,
+                            BinaryExpressionType::NotEqual => IntPredicate::NE,
+                            BinaryExpressionType::Less => IntPredicate::SLT,
+                            BinaryExpressionType::LessEqual => IntPredicate::SLE,
+                            BinaryExpressionType::Greater => IntPredicate::SGE,
+                            BinaryExpressionType::GreaterEqual => IntPredicate::SGT,
+                            _ => unreachable!()
+                        };
+                        data.builder.build_int_compare(predicate, int_left, int_right, "__tmp__")
+                    }
                 };
 
 
@@ -221,7 +240,7 @@ impl Statement for Expression {
 
         if let Expression::IntegerLiteral(ref literal) = self {
             let t = data.context.i64_type();
-            let value = t.const_int(literal.abs() as u64, false);
+            let value = t.const_int(literal.abs() as u64, true);
 
             return Some(Box::new(value));
         }

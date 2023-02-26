@@ -44,6 +44,7 @@ impl<'a> ExpressionParser<'a> {
 
     pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
         // dbg!(&self.expression_stack);
+        dbg!(&token);
         if let Some(ref mut parser) = self.waiting_function_parser {
             // dbg!("started parsing function with token");
             // dbg!(&token);
@@ -103,6 +104,12 @@ impl<'a> ExpressionParser<'a> {
                 self.append_expr(mini_expr);
             }
             Token::Plus => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Addition)),
+            Token::Lesser => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Less)),
+            Token::LesserEqual => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::LessEqual)),
+            Token::Greater => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Greater)),
+            Token::GreaterEqual => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::GreaterEqual)),
+            Token::NotEqual => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::NotEqual)),
+            Token::DoubleEqual => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Equal)),
             Token::Minus if !unary_mode => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Subtraction)),
             Token::Star if !unary_mode => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Multiplication)),
             Token::Star if unary_mode => self.waiting_unary_operation = Some(WaitingUnaryTypes::Dereference),

@@ -1,14 +1,5 @@
-def thing() {
-    return 9
-}
-
-def double(a: &i64) {
-    a = *a * 2
-    return *a * 2
-}
-
 def main() {
-    a = 2
-    d = double(&a)
-    return a
+    a = 1
+    b = 2
+    return a <= b
 }

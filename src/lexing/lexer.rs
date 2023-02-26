@@ -43,7 +43,25 @@ impl Lexer {
             '{' => Some(Token::OpenCurly),
             '}' => Some(Token::ClosedCurly),
             '&' => Some(Token::Ampersand),
-            '=' => Some(Token::Equal),
+            '=' if self.peek_next() != Some('=') => Some(Token::Equal),
+            '=' if self.peek_next() == Some('=') => {
+                self.pop();
+                Some(Token::DoubleEqual)
+            },
+            '<' if self.peek_next() != Some('=') => Some(Token::Lesser),
+            '<' if self.peek_next() == Some('=') => {
+                self.pop();
+                Some(Token::LesserEqual)
+            },
+            '>' if self.peek_next() != Some('=') => Some(Token::Greater),
+            '>' if self.peek_next() == Some('=') => {
+                self.pop();
+                Some(Token::GreaterEqual)
+            },
+            '!' if self.peek_next() == Some('=') => {
+                self.pop();
+                Some(Token::NotEqual)
+            },
             ':' => Some(Token::Colon),
             '[' => Some(Token::OpenSquare),
             ']' => Some(Token::CloseSquare),
@@ -90,6 +108,10 @@ impl Lexer {
 
     fn peek(&self) -> Option<char> {
         self.raw_text.chars().next()
+    }
+
+    fn peek_next(&self) -> Option<char> {
+        self.raw_text.chars().skip(1).next()
     }
 }
 
