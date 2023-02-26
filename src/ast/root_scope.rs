@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashSet};
+use std::{collections::HashSet};
 use std::collections::HashMap;
 use inkwell::values::AnyValue;
 use crate::ast::{Compiler, Scope, Statement, Variable};

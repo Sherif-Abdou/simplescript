@@ -1,7 +1,7 @@
 use std::{collections::HashMap, cell::RefCell};
 use std::path::Path;
 
-use inkwell::{context::Context, module::Module, execution_engine::JitFunction};
+use inkwell::{context::Context, execution_engine::JitFunction};
 
 use crate::{ast::Compiler, parsing::Parser};
 
@@ -20,6 +20,7 @@ pub fn run(file: String) {
         builder: context.create_builder(),
         variable_table: RefCell::new(HashMap::new()),
         function_table: RefCell::new(HashMap::new()),
+        current_function_params: RefCell::new(HashMap::new()),
         data_types: parser.data_types.clone(),
     };
 

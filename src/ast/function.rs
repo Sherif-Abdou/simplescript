@@ -1,10 +1,13 @@
-use std::{collections::{HashMap, HashSet}};
+use std::{collections::{HashMap, HashSet}, cell::RefCell};
 
-use super::{Statement, Variable, Scope};
+use inkwell::types::{BasicType, BasicTypeEnum, BasicMetadataTypeEnum};
+
+use super::{Statement, Variable, Scope, DataType};
 
 
 #[derive(Default)]
 pub struct Function {
+    pub params: Vec<(String, DataType)>,
     pub commands: Vec<Box<dyn Statement>>,
     pub variables: HashMap<String, Variable>,
     pub functions: HashSet<String>,
@@ -43,7 +46,17 @@ impl Scope for Function {
 
 impl Statement for Function {
     fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        let fn_value = data.module.add_function(&self.name, data.context.i64_type().fn_type(&[], false), None);
+        let param_types: Vec<BasicMetadataTypeEnum> = self.params.iter().map(|(n, dt)| dt.produce_llvm_type(data.context).as_basic_type_enum().into()).collect();
+        let fn_value = data.module.add_function(&self.name, data.context.i64_type().fn_type(&param_types, false), None);
+        let values = fn_value.get_params();
+        let mut param_map = HashMap::new();
+        for i in 0..values.len() {
+            let name = self.params[i].0.clone();
+            let value = values[i];
+            param_map.insert(name.clone(), value);
+        }
+        let rfcell = RefCell::new(param_map);
+        data.current_function_params.swap(&rfcell);
         let block = data.context.append_basic_block(fn_value, "entry");
         data.builder.position_at_end(block);
         for command in &self.commands {

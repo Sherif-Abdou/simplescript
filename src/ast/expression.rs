@@ -1,4 +1,4 @@
-use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue}, types::BasicType, AddressSpace};
+use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue, BasicValue, BasicValueEnum, BasicMetadataValueEnum}, types::BasicType, AddressSpace};
 
 
 use super::{statement::Statement, Scope, DataTypeEnum, Compiler};
@@ -77,7 +77,9 @@ impl Expression {
                 };
                 return Some(thing);
             },
-            Expression::VariableRead(v) => return Some(scope.get_variable(v).unwrap().data_type.symbol.clone()),
+            Expression::VariableRead(v) => {
+                return Some(scope.get_variable(v).unwrap().data_type.symbol.clone())
+            },
             Expression::IntegerLiteral(_) => return Some("i64".to_string()),
             Expression::Array(ref list) => {
                 // dbg!("is array");
@@ -91,6 +93,9 @@ impl Expression {
                 } else {
                     unimplemented!()
                 }
+            },
+            Expression::FunctionCall(name, args) => {
+                return Some("i64".to_owned());
             },
             _ => unimplemented!()
         };
@@ -201,8 +206,12 @@ impl Statement for Expression {
 
 
         if let Expression::VariableRead(variable_name) = self {
-            let load = data.builder.build_load(self.expression_location(data).unwrap(), variable_name);
-            return Some(Box::new(load));
+            if let Some(param) = data.current_function_params.borrow().get(variable_name) {
+                return Some(Box::new(param.as_basic_value_enum()));
+            } else {
+                let load = data.builder.build_load(self.expression_location(data).unwrap(), variable_name);
+                return Some(Box::new(load));
+            }
         }
 
         if let Expression::IntegerLiteral(ref literal) = self {
@@ -260,7 +269,9 @@ impl Statement for Expression {
 
         if let Expression::FunctionCall(name, args) = self {
             let function = data.function_table.borrow()[name];
-            let call_output = data.builder.build_call(function, &[], "__tmp__").try_as_basic_value();
+            let params: Vec<BasicValueEnum> = args.iter().map(|v| v.visit(data).unwrap().as_any_value_enum().try_into().unwrap()).collect();
+            let mapped: Vec<BasicMetadataValueEnum> = params.iter().map(|v| (*v).into()).collect();
+            let call_output = data.builder.build_call(function, &mapped, "__tmp__").try_as_basic_value();
             if let Some(call_value) = call_output.left() {
                 let as_any = call_value.as_any_value_enum();
                 return Some(Box::new(as_any));

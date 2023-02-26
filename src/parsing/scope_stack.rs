@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, borrow::BorrowMut};
+use std::{collections::VecDeque};
 
 use crate::ast::{Scope, Statement};
 

@@ -1,5 +1,4 @@
-use inkwell::AddressSpace;
-use inkwell::values::{AnyValue, BasicValue, BasicValueEnum};
+use inkwell::values::{AnyValue, BasicValueEnum};
 use crate::ast::{Compiler, Expression, Statement};
 
 pub struct InsertVariable {

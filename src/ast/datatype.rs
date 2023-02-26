@@ -2,8 +2,6 @@ use std::{hash::Hash, collections::HashMap};
 
 use inkwell::{types::{BasicType, BasicTypeEnum}, AddressSpace, context::Context};
 
-use super::Compiler;
-
 type DataTypeVector = Vec<Box<DataType>>;
 type NameMap = HashMap<String, u64>;
 

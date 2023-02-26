@@ -1,14 +1,10 @@
 use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, InsertVariable, ReturnCommand, Variable, DataType}};
-use std::{collections::{VecDeque, HashMap}, error::Error, fmt::Display, cell::RefCell, ops::IndexMut};
-use inkwell::values::InstructionOpcode::InsertValue;
-use regex::Regex;
-use std::any::{Any, TypeId};
-use crate::ast::{RootScope, Statement};
+use std::{collections::{HashMap}, error::Error, fmt::Display, cell::RefCell};
+use crate::ast::{RootScope};
 use crate::parsing::ParsingError::MissingToken;
 
 use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser, data_type_parser::DataTypeParser};
 
-const ARRAY_REGEX: &'static str = r"\[(.*):(\d+)\]";
 
 pub struct Parser {
     lexer: RefCell<Lexer>,
@@ -199,16 +195,37 @@ impl Parser {
         if Token::OpenParenth != self.next() {
             return Err(Box::new(ParsingError::MissingToken));
         };
-
-        let Token::CloseParenth = self.next() else {
-            return Err(Box::new(ParsingError::MissingToken));
-        };
+        let mut next = self.next();
+        let mut params = Vec::new();
+        while next != Token::CloseParenth {
+            let Token::Identifier(iden) = next.clone() else {
+                return Err(Box::new(ParsingError::MissingToken));
+            };
+            next = self.next();
+            let Token::Colon = next.clone() else {
+                return Err(Box::new(ParsingError::MissingToken));
+            };
+            next = self.next();
+            let mut dt_parser = DataTypeParser::new(&self.data_types);
+            while dt_parser.consume(next.clone()) {
+                next = self.next();
+            }
+            let dt = dt_parser.build();
+            params.push((iden, dt));
+            if next == Token::Comma {
+                next = self.next();
+            }
+        }
 
         let Token::OpenCurly = self.next() else {
             return Err(Box::new(ParsingError::MissingToken));
         };
 
         let mut function = Function::default();
+        for (name, dt) in &params {
+            function.variables.insert(name.clone(), Variable { name: name.clone(), data_type: dt.clone() });
+        }
+        function.params = params;
         self.scope_stack.add_function(&func_name);
         function.name = func_name.to_string();
         self.scope_stack.push_front(Box::new(function));
