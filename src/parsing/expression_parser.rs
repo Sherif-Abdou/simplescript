@@ -43,7 +43,6 @@ impl<'a> ExpressionParser<'a> {
     }
 
     pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
-        // dbg!(&token);
         if let Some(ref mut parser) = self.waiting_function_parser {
             // dbg!("started parsing function with token");
             // dbg!(&token);
@@ -87,15 +86,25 @@ impl<'a> ExpressionParser<'a> {
                         self.expression_stack.push_front(Expression::Array(arr));
                         self.parser_stack.push_front(ExpressionParser::with_scope_stack(&self.scope_stack.unwrap()));
                     }
+                },
+                Token::CloseParenth => {
+                    if let Some(new_expression) = sub_expression {
+                        self.append_expr(new_expression);
+                        self.was_last_binary = false;
+                    }
                 }
-                _ => panic!("Unexpected token in array literal")
+                _ => panic!()
             }
             return Ok(true);
         }
         self.check_variable(&token);
 
+        // dbg!(&token);
         let unary_mode = self.was_last_binary || self.expression_stack.is_empty();
-        // dbg!(&unary_mode, &token);
+        if token == Token::Star {
+            dbg!(&self.expression_stack);
+            dbg!(&unary_mode, &token);
+        }
 
         match token {
             Token::Integer(v) => {
@@ -144,6 +153,9 @@ impl<'a> ExpressionParser<'a> {
                         self.waiting_function_parser = Some(function_parser);
                     }
                 }
+            }
+            Token::OpenParenth => {
+                self.parser_stack.push_front(self.scope_stack.map(|v| ExpressionParser::with_scope_stack(v)).unwrap_or(ExpressionParser::new()));
             }
             Token::EOL => return Ok(false),
             Token::Comma => return Ok(false),
