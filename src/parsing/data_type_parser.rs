@@ -75,7 +75,8 @@ impl<'a> DataTypeParser<'a> {
             Token::Comma => return false,
             Token::Equal => return false,
             Token::CloseParenth => return false,
-            _ => return true,
+            Token::OpenCurly => return false,
+            _ => return false,
         }
 
         true

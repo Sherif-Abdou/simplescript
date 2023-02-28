@@ -75,12 +75,15 @@ impl Lexer {
         }
 
         if current.is_numeric() {
-            while current.is_numeric() && !self.empty() {
+            while (current.is_numeric() || current == '.') && !self.empty() {
                 current_string.push(self.pop());
                 if self.peek().is_none() {
                     break;
                 }
                 current = self.peek().unwrap();
+            }
+            if current_string.contains(".") {
+                return Token::Float(current_string.parse().unwrap());
             }
             return Token::Integer(current_string.parse().unwrap());
         }

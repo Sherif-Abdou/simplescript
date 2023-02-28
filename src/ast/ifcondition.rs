@@ -1,6 +1,6 @@
 use std::{collections::HashMap, thread::current};
 
-use super::{Statement, Variable, Scope, Function, Expression};
+use super::{Statement, Variable, Scope, Function, Expression, DataType};
 
 pub struct IfCondition {
     pub commands: Vec<Box<dyn Statement>>,
@@ -43,11 +43,15 @@ impl Scope for IfCondition {
       false
     }
 
-    fn add_function(&mut self, name: &str) {
+    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
     }
 
     fn wrap_up_parsing(&mut self, parser: &mut crate::parsing::Parser) {
         
+    }
+
+    fn return_type_of(&self, name: &str) -> Option<DataType> {
+        todo!()
     }
 }
 

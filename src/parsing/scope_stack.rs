@@ -1,6 +1,6 @@
 use std::{collections::VecDeque};
 
-use crate::ast::{Scope, Statement};
+use crate::ast::{Scope, Statement, DataType};
 
 
 #[derive(Default)]
@@ -68,7 +68,16 @@ impl Scope for ScopeStack {
         false
     }
 
-    fn add_function(&mut self, name: &str) {
-        self.scope_stack.front_mut().unwrap().add_function(name);
+    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
+        self.scope_stack.front_mut().unwrap().add_function(name, return_type);
+    }
+
+    fn return_type_of(&self, name: &str) -> Option<DataType> {
+        for scope in &self.scope_stack {
+            if scope.contains_function(name) {
+                return scope.return_type_of(name);
+            }
+        }
+        panic!()
     }
 }

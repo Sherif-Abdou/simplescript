@@ -5,3 +5,4 @@ mod data_type_parser;
 mod function_call_parser;
 
 pub use parser::*;
+pub use data_type_parser::*;

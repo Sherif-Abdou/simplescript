@@ -101,16 +101,15 @@ impl<'a> ExpressionParser<'a> {
 
         // dbg!(&token);
         let unary_mode = self.was_last_binary || self.expression_stack.is_empty();
-        if token == Token::Star {
-            dbg!(&self.expression_stack);
-            dbg!(&unary_mode, &token);
-        }
 
         match token {
             Token::Integer(v) => {
                 let mini_expr = Expression::IntegerLiteral(v);
                 self.append_expr(mini_expr);
-            }
+            },
+            Token::Float(v) => {
+                self.append_expr(Expression::FloatLiteral(v));
+            },
             Token::Plus => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Addition)),
             Token::Lesser => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Less)),
             Token::LesserEqual => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::LessEqual)),

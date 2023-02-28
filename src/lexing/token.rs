@@ -1,7 +1,8 @@
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Identifier(String),
     Integer(i64),
+    Float(f64),
     Def,
     Return,
     OpenCurly,

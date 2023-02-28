@@ -1,4 +1,4 @@
-use std::{hash::Hash, collections::HashMap};
+use std::{hash::Hash, collections::HashMap, fmt::format};
 
 use inkwell::{types::{BasicType, BasicTypeEnum}, AddressSpace, context::Context};
 
@@ -45,6 +45,16 @@ impl DataType {
         let struct_type = compiler.struct_type(slice, false);
         Box::new(struct_type)
     }
+
+    pub fn produce_string(&self) -> String {
+        match self.value {
+            DataTypeEnum::Primitive => self.symbol.clone(),
+            DataTypeEnum::Array(ref interior, ref n) => format!("[{}:{}]", interior.produce_string(), n),
+            DataTypeEnum::Struct(ref values, ref names) => self.symbol.clone(),
+            DataTypeEnum::Pointer(ref interior) => format!("&{}", interior.produce_string()),
+        }
+    }
+
 }
 
 impl PartialEq for DataType {

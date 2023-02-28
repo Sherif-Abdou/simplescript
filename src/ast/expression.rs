@@ -1,9 +1,13 @@
-use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue, BasicValue, BasicValueEnum, BasicMetadataValueEnum}, types::BasicType, AddressSpace, IntPredicate};
+use std::any::Any;
+use std::collections::HashMap;
+use inkwell::{values::{AnyValue, AnyValueEnum, ArrayValue, IntValue, FloatValue, PointerValue, StructValue, BasicValue, BasicValueEnum, BasicMetadataValueEnum}, types::BasicType, AddressSpace, IntPredicate, FloatPredicate};
+use crate::ast::DataType;
+use crate::parsing::DataTypeParser;
 
 
 use super::{statement::Statement, Scope, DataTypeEnum, Compiler};
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Expression {
     Binary(Option<Box<Expression>>, Option<Box<Expression>>, BinaryExpressionType),
     Unary(Option<Box<Expression>>, UnaryExpressionType),
@@ -12,6 +16,7 @@ pub enum Expression {
     VariableRead(String),
     VariableExtract(String, Box<Expression>),
     IntegerLiteral(i64),
+    FloatLiteral(f64),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -63,24 +68,25 @@ impl Expression {
             Expression::Unary(_, t) => t.precidence(),
             Expression::VariableRead(_) => 100,
             Expression::IntegerLiteral(_) => 100,
+            Expression::FloatLiteral(_) => 100,
             Expression::Array(_) => 200,
             Expression::VariableExtract(_, _) => 100,
             Expression::FunctionCall(_, _) => 100,
         }
     }
 
-    pub fn data_type(&self, scope: &dyn Scope) -> Option<String> {
+    pub fn data_type(&self, scope: &dyn Scope, data_types: &HashMap<String, DataType>) -> Option<String> {
         match self {
             Expression::Binary(l, r, _) => {
-                if l.as_ref().unwrap().data_type(scope) == r.as_ref().unwrap().data_type(scope) {
-                    return l.as_ref().unwrap().data_type(scope).clone();
+                if l.as_ref().unwrap().data_type(scope, data_types) == r.as_ref().unwrap().data_type(scope, data_types) {
+                    return l.as_ref().or(r.as_ref()).unwrap().data_type(scope, data_types).clone();
                 }
                 return None;
             }
             Expression::Unary(Some(interior), dt) => {
                 let thing = match dt {
-                    UnaryExpressionType::Reference => format!("&{}", interior.data_type(scope).unwrap()),
-                    UnaryExpressionType::Dereference => interior.data_type(scope).unwrap()[1..].to_string(),
+                    UnaryExpressionType::Reference => format!("&{}", interior.data_type(scope, data_types).unwrap()),
+                    UnaryExpressionType::Dereference => interior.data_type(scope, data_types).unwrap()[1..].to_string(),
                 };
                 return Some(thing);
             },
@@ -88,9 +94,10 @@ impl Expression {
                 return Some(scope.get_variable(v).unwrap().data_type.symbol.clone())
             },
             Expression::IntegerLiteral(_) => return Some("i64".to_string()),
+            Expression::FloatLiteral(_) => return Some("f64".to_string()),
             Expression::Array(ref list) => {
                 // dbg!("is array");
-                return Some(format!("[{}:{}]", list[0].data_type(scope)?, list.len()));
+                return Some(format!("[{}:{}]", list[0].data_type(scope, data_types)?, list.len()));
             }
             Expression::VariableExtract(ref name, _) => {
                 let data_type = &scope.get_variable(name).unwrap().data_type;
@@ -101,11 +108,27 @@ impl Expression {
                     unimplemented!()
                 }
             },
-            Expression::FunctionCall(name, args) => {
-                return Some("i64".to_owned());
+            Expression::FunctionCall(name, _) => {
+                let result = scope.return_type_of(name).unwrap().produce_string();
+                return Some(result);
             },
             _ => unimplemented!()
         };
+        None
+    }
+
+    pub fn expression_type(&self, scope: &dyn Scope, data_types: &HashMap<String, DataType>) -> Option<DataType> {
+        let dt_opt = self.data_type(scope, data_types);
+        if let Some(dt) = dt_opt {
+            let mut data_type_parser = DataTypeParser::new(data_types);
+
+            let data_type = data_type_parser.parse_string(dt);
+            return Some(data_type);
+        }
+
+        if let Expression::FunctionCall(name, params) = self {
+        }
+
         None
     }
 
@@ -184,6 +207,55 @@ impl Expression {
 
         None
     }
+
+    fn binary_statement<'a>(data: &'a Compiler, binary_type: &'a BinaryExpressionType, parsed_left: AnyValueEnum<'a>, parsed_right: AnyValueEnum<'a>) -> Box<AnyValueEnum<'a>> {
+        dbg!(&parsed_left, &parsed_right);
+        if let (AnyValueEnum::IntValue(int_left), AnyValueEnum::IntValue(int_right)) = (parsed_left, parsed_right) {
+            let value = match binary_type {
+                BinaryExpressionType::Addition => data.builder.build_int_add(int_left, int_right, "__tmp__"),
+                BinaryExpressionType::Subtraction => data.builder.build_int_sub(int_left, int_right, "__tmp__"),
+                BinaryExpressionType::Multiplication => data.builder.build_int_mul(int_left, int_right, "__tmp__"),
+                BinaryExpressionType::Division => data.builder.build_int_signed_div(int_left, int_right, "__tmp__"),
+                _ => {
+                    let predicate = match binary_type {
+                        BinaryExpressionType::Equal => IntPredicate::EQ,
+                        BinaryExpressionType::NotEqual => IntPredicate::NE,
+                        BinaryExpressionType::Less => IntPredicate::SLT,
+                        BinaryExpressionType::LessEqual => IntPredicate::SLE,
+                        BinaryExpressionType::Greater => IntPredicate::SGE,
+                        BinaryExpressionType::GreaterEqual => IntPredicate::SGT,
+                        _ => unreachable!()
+                    };
+                    data.builder.build_int_compare(predicate, int_left, int_right, "__tmp__")
+                }
+            };
+
+            return Box::new(value.as_any_value_enum());
+        }
+        if let (AnyValueEnum::FloatValue(int_left), AnyValueEnum::FloatValue(int_right)) = (parsed_left, parsed_right) {
+            let value: Box<dyn AnyValue> = match binary_type {
+                BinaryExpressionType::Addition => Box::new(data.builder.build_float_add(int_left, int_right, "__tmp__")),
+                BinaryExpressionType::Subtraction => Box::new(data.builder.build_float_sub(int_left, int_right, "__tmp__")),
+                BinaryExpressionType::Multiplication => Box::new(data.builder.build_float_mul(int_left, int_right, "__tmp__")),
+                BinaryExpressionType::Division => Box::new(data.builder.build_float_div(int_left, int_right, "__tmp__")),
+                _ => {
+                    let predicate = match binary_type {
+                        BinaryExpressionType::Equal => FloatPredicate::OEQ,
+                        BinaryExpressionType::NotEqual => FloatPredicate::ONE,
+                        BinaryExpressionType::Less => FloatPredicate::OLT,
+                        BinaryExpressionType::LessEqual => FloatPredicate::OLE,
+                        BinaryExpressionType::Greater => FloatPredicate::OGE,
+                        BinaryExpressionType::GreaterEqual => FloatPredicate::OGT,
+                        _ => unreachable!()
+                    };
+                    Box::new(data.builder.build_float_compare(predicate, int_left, int_right, "__tmp__"))
+                }
+            };
+
+            return Box::new(value.as_any_value_enum());
+        }
+        unimplemented!()
+    }
 }
 
 impl Statement for Expression {
@@ -191,29 +263,7 @@ impl Statement for Expression {
         if let Expression::Binary(left, right, binary_type) = self {
             let parsed_left = left.as_ref().unwrap().visit(data)?.as_any_value_enum();
             let parsed_right = right.as_ref().unwrap().visit(data)?.as_any_value_enum();
-            if let (AnyValueEnum::IntValue(int_left), AnyValueEnum::IntValue(int_right)) = (parsed_left, parsed_right) {
-                let value = match binary_type {
-                    BinaryExpressionType::Addition => data.builder.build_int_add(int_left, int_right, "__tmp__"),
-                    BinaryExpressionType::Subtraction => data.builder.build_int_sub(int_left, int_right, "__tmp__"),
-                    BinaryExpressionType::Multiplication => data.builder.build_int_mul(int_left, int_right, "__tmp__"),
-                    BinaryExpressionType::Division => data.builder.build_int_signed_div(int_left, int_right, "__tmp__"),
-                    _ => {
-                        let predicate = match binary_type {
-                            BinaryExpressionType::Equal => IntPredicate::EQ,
-                            BinaryExpressionType::NotEqual => IntPredicate::NE,
-                            BinaryExpressionType::Less => IntPredicate::SLT,
-                            BinaryExpressionType::LessEqual => IntPredicate::SLE,
-                            BinaryExpressionType::Greater => IntPredicate::SGE,
-                            BinaryExpressionType::GreaterEqual => IntPredicate::SGT,
-                            _ => unreachable!()
-                        };
-                        data.builder.build_int_compare(predicate, int_left, int_right, "__tmp__")
-                    }
-                };
-
-
-                return Some(Box::new(value));
-            }
+            return Some(Self::binary_statement(data, binary_type, parsed_left, parsed_right));
         }
 
         if let Expression::Unary(Some(interior), operation) = self {
@@ -241,6 +291,13 @@ impl Statement for Expression {
         if let Expression::IntegerLiteral(ref literal) = self {
             let t = data.context.i64_type();
             let value = t.const_int(literal.abs() as u64, true);
+
+            return Some(Box::new(value));
+        }
+
+        if let Expression::FloatLiteral(ref literal) = self {
+            let t = data.context.f64_type();
+            let value = t.const_float(*literal);
 
             return Some(Box::new(value));
         }

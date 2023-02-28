@@ -36,6 +36,10 @@ impl Parser {
             symbol: "i64".to_string(),
             value: crate::ast::DataTypeEnum::Primitive,
         });
+        data_types.insert("f64".to_string(), DataType {
+            symbol: "f64".to_string(),
+            value: crate::ast::DataTypeEnum::Primitive,
+        });
         let mut scope_stack = ScopeStack::default();
         scope_stack.push_front(Box::new(RootScope::default()));
         Self {
@@ -181,23 +185,12 @@ impl Parser {
     }
 
     fn expression_type(&mut self, expr: &Expression) -> DataType {
-        // let symbol = expr.data_type(&self.scope_stack).expect("Can't infer data type").to_string();
-        // let re = Regex::new(ARRAY_REGEX).unwrap();
-        // if let Some(captures) = re.captures(&symbol) {
-        //     let interior_type = captures.get(1).unwrap().as_str();
-        //     let count: u64 = captures.get(2).unwrap().as_str().parse().unwrap();
-        //     let data_type = DataType {
-        //         symbol: symbol.clone(),
-        //         value: crate::ast::DataTypeEnum::Array(Box::new(self.data_types[interior_type].clone()), count),
-        //     };
-        //     self.data_types.insert(symbol.clone(), data_type.clone());
-        //     return data_type;
-        // }
-        let mut data_type_parser = DataTypeParser::new(&self.data_types);
-        let thing = expr.data_type(&self.scope_stack).unwrap();
-        // dbg!(&thing);
-        let data_type = data_type_parser.parse_string(thing);
-        data_type
+        // let mut data_type_parser = DataTypeParser::new(&self.data_types);
+        // let thing = expr.data_type(&self.scope_stack).unwrap();
+
+        // let data_type = data_type_parser.parse_string(thing);
+        // data_type
+        expr.expression_type(&self.scope_stack, &self.data_types).unwrap()
     }
 
     fn parse_function(&mut self) -> ParsingResult<()> {
@@ -240,16 +233,26 @@ impl Parser {
             }
         }
 
-        let Token::OpenCurly = self.next() else {
+        next = self.next();
+        let mut return_type = None;
+        if next == Token::Colon {
+            next = self.next();
+            let mut data_type_parser = DataTypeParser::new(&self.data_types);
+            while data_type_parser.consume(next.clone()) {
+                next = self.next();
+            }
+            return_type = Some(data_type_parser.build());
+        }
+        let Token::OpenCurly = next else {
             return Err(Box::new(ParsingError::MissingToken));
         };
 
-        let mut function = Function::default();
+        let mut function = Function::new(return_type.clone());
         for (name, dt) in &params {
             function.variables.insert(name.clone(), Variable { name: name.clone(), data_type: dt.clone() });
         }
         function.params = params;
-        self.scope_stack.add_function(&func_name);
+        self.scope_stack.add_function(&func_name, return_type.clone());
         function.name = func_name.to_string();
         self.scope_stack.push_front(Box::new(function));
 

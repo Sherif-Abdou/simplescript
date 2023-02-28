@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use inkwell::values::AnyValue;
 use crate::ast::{Compiler, Scope, Statement, Variable};
 
+use super::DataType;
+
 #[derive(Default)]
 pub struct RootScope {
     pub commands: Vec<Box<dyn Statement>>,
     pub variables: HashMap<String, Variable>,
-    pub functions: HashSet<String>,
+    pub functions: HashMap<String, Option<DataType>>,
     pub name: String,
 }
 
@@ -43,10 +45,14 @@ impl Scope for RootScope {
     }
 
     fn contains_function(&self, name: &str) -> bool {
-        self.functions.contains(name)
+        self.functions.contains_key(name)
     }
 
-    fn add_function(&mut self, name: &str) {
-        self.functions.insert(name.to_owned());
+    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
+        self.functions.insert(name.to_owned(), return_type);
+    }
+
+    fn return_type_of(&self, name: &str) -> Option<DataType> {
+        self.functions[name].clone()
     }
 }
