@@ -69,6 +69,63 @@ impl Lexer {
             _ => None
         };
 
+        if current == '"' {
+            let mut string = String::new();
+            let mut escaped = false;
+            self.pop();
+            while self.peek() != Some('"') {
+                if !escaped {
+                    if self.peek() == Some('\\') {
+                        escaped = true;
+                        self.pop();
+                    } else {
+                        string.push(self.pop());
+                    }
+                } else {
+                    match self.peek().unwrap() {
+                        '\\' => string.push(self.pop()),
+                        '"' => string.push(self.pop()),
+                        'n' => {
+                            string.push('\n');
+                            self.pop();
+                        },
+                        _ => panic!("Invalid Escaped Character"),
+                    };
+                    escaped = false;
+                } 
+            }
+            self.pop();
+            return Token::String(string);
+        }
+        if current == '\'' {
+            let mut string = String::new();
+            let mut escaped = false;
+            self.pop();
+            while self.peek() != Some('\'') {
+                if !escaped {
+                    if self.peek() == Some('\\') {
+                        escaped = true;
+                        self.pop();
+                    } else {
+                        string.push(self.pop());
+                    }
+                } else {
+                    match self.peek().unwrap() {
+                        '\\' => string.push(self.pop()),
+                        '"' => string.push(self.pop()),
+                        'n' => {
+                            string.push('\n');
+                            self.pop();
+                        },
+                        _ => panic!("Invalid Escaped Character"),
+                    };
+                    escaped = false;
+                } 
+            }
+            assert!(string.len() == 1);
+            self.pop();
+            return Token::Char(string.as_bytes()[0].clone());
+        }
         if let Some(token) = sc_token {
             self.pop();
             return token;

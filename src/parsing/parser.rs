@@ -40,6 +40,10 @@ impl Parser {
             symbol: "f64".to_string(),
             value: crate::ast::DataTypeEnum::Primitive,
         });
+        data_types.insert("char".to_string(), DataType {
+            symbol: "char".to_string(),
+            value: crate::ast::DataTypeEnum::Primitive,
+        });
         let mut scope_stack = ScopeStack::default();
         scope_stack.push_front(Box::new(RootScope::default()));
         Self {

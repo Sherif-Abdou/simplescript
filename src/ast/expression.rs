@@ -17,6 +17,8 @@ pub enum Expression {
     VariableExtract(String, Box<Expression>),
     IntegerLiteral(i64),
     FloatLiteral(f64),
+    StringLiteral(String),
+    CharLiteral(u8),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -72,6 +74,7 @@ impl Expression {
             Expression::Array(_) => 200,
             Expression::VariableExtract(_, _) => 100,
             Expression::FunctionCall(_, _) => 100,
+            _ => 100,
         }
     }
 
@@ -95,6 +98,8 @@ impl Expression {
             },
             Expression::IntegerLiteral(_) => return Some("i64".to_string()),
             Expression::FloatLiteral(_) => return Some("f64".to_string()),
+            Expression::StringLiteral(ref s) => return Some(format!("[char:{}]", s.len())),
+            Expression::CharLiteral(_) => return Some("char".to_string()),
             Expression::Array(ref list) => {
                 // dbg!("is array");
                 return Some(format!("[{}:{}]", list[0].data_type(scope, data_types)?, list.len()));
@@ -178,13 +183,14 @@ impl Expression {
     pub fn expression_location<'a>(&'a self, data: &'a Compiler) -> Option<PointerValue<'a>> {
         if let Expression::VariableExtract(ref name, ref slot) = self {
             // dbg!("Doing thing for extract");
+            
             let ptr = data.variable_table.borrow()[name];
             let slot_value = slot.visit(data).unwrap().as_any_value_enum().into_int_value();
             unsafe {
                 let new_location = data.builder.build_gep(ptr, &[data.context.i64_type().const_zero(), slot_value], "__tmp__");
-                let type_changed = data.builder.build_pointer_cast(new_location, data.context.i64_type().ptr_type(AddressSpace::default()), "__tmp__");
+                // let type_changed = data.builder.build_pointer_cast(new_location, data.context.i64_type().ptr_type(AddressSpace::default()), "__tmp__");
 
-                return Some(type_changed);
+                return Some(new_location);
             }
         }
 
@@ -209,7 +215,6 @@ impl Expression {
     }
 
     fn binary_statement<'a>(data: &'a Compiler, binary_type: &'a BinaryExpressionType, parsed_left: AnyValueEnum<'a>, parsed_right: AnyValueEnum<'a>) -> Box<AnyValueEnum<'a>> {
-        dbg!(&parsed_left, &parsed_right);
         if let (AnyValueEnum::IntValue(int_left), AnyValueEnum::IntValue(int_right)) = (parsed_left, parsed_right) {
             let value = match binary_type {
                 BinaryExpressionType::Addition => data.builder.build_int_add(int_left, int_right, "__tmp__"),
@@ -301,6 +306,20 @@ impl Statement for Expression {
 
             return Some(Box::new(value));
         }
+
+        if let Expression::StringLiteral(ref str) = self {
+            let bytes: Vec<_> = str.as_bytes().iter().map(|v| data.context.i8_type().const_int(*v as u64, false)).collect();
+            let array = data.context.i8_type().const_array(&bytes);
+
+            return Some(Box::new(array));
+        }
+
+        if let Expression::CharLiteral(c) = self {
+            let value = data.context.i8_type().const_int(*c as u64, false);
+
+            return Some(Box::new(value));
+        }
+
         if let Expression::Array(ref values) = self {
             let expressions: Vec<Box<dyn AnyValue>> = values.iter().map(|v| v.visit(data)).flatten().collect();
             if expressions.is_empty() {

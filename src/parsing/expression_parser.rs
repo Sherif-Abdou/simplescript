@@ -110,6 +110,12 @@ impl<'a> ExpressionParser<'a> {
             Token::Float(v) => {
                 self.append_expr(Expression::FloatLiteral(v));
             },
+            Token::String(v) => {
+                self.append_expr(Expression::StringLiteral(v));
+            },
+            Token::Char(v) => {
+                self.append_expr(Expression::CharLiteral(v));
+            },
             Token::Plus => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Addition)),
             Token::Lesser => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::Less)),
             Token::LesserEqual => self.append_expr(Expression::Binary(None, None, crate::ast::BinaryExpressionType::LessEqual)),

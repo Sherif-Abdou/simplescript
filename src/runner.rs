@@ -5,7 +5,7 @@ use inkwell::{context::Context, execution_engine::JitFunction};
 
 use crate::{ast::Compiler, parsing::Parser};
 
-type MainFunc = unsafe extern "C" fn() -> i64;
+type MainFunc = unsafe extern "C" fn() -> u8;
 
 pub fn run(file: String) {
     let context = Context::create();
@@ -28,6 +28,6 @@ pub fn run(file: String) {
     compiler.module.print_to_file(Path::new("./test/output.txt")).unwrap();
     unsafe {
         let main: JitFunction<MainFunc> = engine.get_function("main").unwrap();
-        println!("Result: {}", main.call());
+        println!("Result: {:?}", main.call());
     }
 }
