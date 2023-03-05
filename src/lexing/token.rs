@@ -6,6 +6,7 @@ pub enum Token {
     Integer(i64),
     Float(f64),
     Def,
+    As,
     Return,
     OpenCurly,
     ClosedCurly,

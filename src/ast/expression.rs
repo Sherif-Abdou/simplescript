@@ -19,6 +19,7 @@ pub enum Expression {
     FloatLiteral(f64),
     StringLiteral(String),
     CharLiteral(u8),
+    ExpressionCast(Box<Expression>, String),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -117,6 +118,7 @@ impl Expression {
                 let result = scope.return_type_of(name).unwrap().produce_string();
                 return Some(result);
             },
+            Expression::ExpressionCast(_, res) => return Some(res.clone()),
             _ => unimplemented!()
         };
         None
@@ -124,6 +126,7 @@ impl Expression {
 
     pub fn expression_type(&self, scope: &dyn Scope, data_types: &HashMap<String, DataType>) -> Option<DataType> {
         let dt_opt = self.data_type(scope, data_types);
+        dbg!(&dt_opt, self);
         if let Some(dt) = dt_opt {
             let mut data_type_parser = DataTypeParser::new(data_types);
 
@@ -132,8 +135,7 @@ impl Expression {
         }
 
         if let Expression::FunctionCall(name, params) = self {
-        }
-
+        } 
         None
     }
 
@@ -261,6 +263,28 @@ impl Expression {
         }
         unimplemented!()
     }
+
+    fn visit_cast<'a>(&'a self, data: &'a Compiler) -> Option<Box<dyn AnyValue + 'a>> {
+        let Self::ExpressionCast(interior, resultant) = &self else {
+            return None;
+        };
+        let compiled = interior.visit(data)?.as_any_value_enum();
+        if compiled.is_int_value() {
+            let integer = compiled.into_int_value();
+
+            let result: Box<dyn AnyValue> = match resultant.as_str() {
+                "f64" => Box::new(data.builder.build_signed_int_to_float(integer, data.context.f64_type(), "__tmp__")),
+                "i64" => Box::new(data.builder.build_int_cast(integer, data.context.i64_type(), "__tmp__")),
+                "char" => Box::new(data.builder.build_int_cast(integer, data.context.i8_type(), "__tmp__")),
+                _ => unimplemented!()
+            };
+            // let res = 
+
+            return Some(result);
+        }
+        // let dt = DataTypeParser::new(data_types)
+        None
+    }
 }
 
 impl Statement for Expression {
@@ -376,6 +400,10 @@ impl Statement for Expression {
                 let as_any = call_value.as_any_value_enum();
                 return Some(Box::new(as_any));
             }
+        }
+
+        if let Expression::ExpressionCast(_, _) = self {
+            return self.visit_cast(data);
         }
         None
     }

@@ -123,6 +123,7 @@ impl Parser {
     fn parse_expression_choice(&mut self, checked: bool) -> ParsingResult<Expression> {
         let mut expr_parser = ExpressionParser::with_scope_stack(&self.scope_stack);
         expr_parser.check_stack = checked;
+        expr_parser.data_types = Some(&self.data_types);
         while expr_parser.consume(self.current_token())? {
             self.next();
         }

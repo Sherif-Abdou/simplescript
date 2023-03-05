@@ -1,8 +1,8 @@
-use std::{collections::VecDeque, f32::consts::E};
+use std::{collections::{VecDeque, HashMap}};
 
-use crate::{lexing::Token, ast::{Expression, Scope, UnaryExpressionType}};
+use crate::{lexing::Token, ast::{Expression, Scope, UnaryExpressionType, DataType}};
 
-use super::{parser::{ParsingResult}, scope_stack::ScopeStack, function_call_parser::FunctionCallParser};
+use super::{parser::{ParsingResult}, scope_stack::ScopeStack, function_call_parser::FunctionCallParser, DataTypeParser, expression_cast_parser::ExpressionCastParser};
 
 enum WaitingUnaryTypes {
     Reference,
@@ -18,6 +18,8 @@ pub struct ExpressionParser<'a> {
     waiting_variable_name: Option<String>,
     waiting_unary_operation: Option<WaitingUnaryTypes>, 
     waiting_function_parser: Option<Box<FunctionCallParser<'a>>>,
+    waiting_data_type_parser: Option<Box<ExpressionCastParser<'a>>>,
+    pub data_types: Option<&'a HashMap<String, DataType>>,
     was_last_binary: bool,
     pub check_stack: bool,
 }
@@ -31,6 +33,8 @@ impl<'a> ExpressionParser<'a> {
             waiting_variable_name: None,
             waiting_unary_operation: None,
             waiting_function_parser: None,
+            waiting_data_type_parser: None,
+            data_types: None,
             was_last_binary: false,
             check_stack: true,
         }
@@ -43,6 +47,14 @@ impl<'a> ExpressionParser<'a> {
     }
 
     pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
+        if let Some(ref mut parser) = self.waiting_data_type_parser {
+            if !parser.consume(token)? {
+                let res = parser.build();
+                self.waiting_data_type_parser = None;
+                self.append_expr(res);
+            }
+            return Ok(true);
+        }
         if let Some(ref mut parser) = self.waiting_function_parser {
             // dbg!("started parsing function with token");
             // dbg!(&token);
@@ -141,7 +153,7 @@ impl<'a> ExpressionParser<'a> {
                     self.parser_stack.push_front(new_parser);
                 }
             }
-            Token::Identifier(name) => {
+            Token::Identifier(ref name) => {
                 // dbg!("Looking for variable");
                 if !self.check_stack {
                     self.waiting_variable_name = Some(name.clone());
@@ -156,7 +168,11 @@ impl<'a> ExpressionParser<'a> {
                         let mut function_parser = Box::new(FunctionCallParser::new(stack));
                         function_parser.consume(Token::Identifier(name.clone()))?;
                         self.waiting_function_parser = Some(function_parser);
+                    } else {
+                        self.waiting_data_type_parser = Some(Box::new(ExpressionCastParser::new(&self.scope_stack.unwrap(), &self.data_types.unwrap())));
+                        self.waiting_data_type_parser.as_mut().unwrap().consume(token)?;
                     }
+                } else {
                 }
             }
             Token::OpenParenth => {
