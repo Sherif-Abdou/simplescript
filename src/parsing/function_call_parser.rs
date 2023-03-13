@@ -1,5 +1,6 @@
 use crate::ast::Expression;
 use crate::{ast::ExpressionEnum, lexing::Token};
+use crate::parsing::sub_expression_parser::SubExpressionParser;
 
 use super::{expression_parser::ExpressionParser, scope_stack::ScopeStack, ParsingResult};
 
@@ -20,13 +21,17 @@ impl<'a> FunctionCallParser<'a> {
         }
     }
 
-    pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
+
+}
+
+impl<'a> SubExpressionParser<'a> for FunctionCallParser<'a> {
+     fn consume(&mut self, token: Token) -> ParsingResult<bool> {
         if let Some(ref mut parser) = self.sub_parser {
             let can_continue = parser.consume(token.clone())?;
             if !can_continue {
                 let maybe_built = parser.build();
                 if let Some(built) = maybe_built {
-                    self.arguments.push(Box::new(built));
+                    self.arguments.push(Box::new(built.into()));
                 }
             }
             if token != Token::CloseParenth {
@@ -49,9 +54,10 @@ impl<'a> FunctionCallParser<'a> {
         Ok(true)
     }
 
-    pub fn build(&mut self) -> ExpressionEnum {
+    fn build(&mut self) -> Option<ExpressionEnum> {
         let function_call =
             ExpressionEnum::FunctionCall(self.name.to_owned(), self.arguments.clone());
-        return function_call;
+        return Some(function_call);
     }
+
 }

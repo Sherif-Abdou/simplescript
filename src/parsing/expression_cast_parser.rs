@@ -4,6 +4,7 @@ use crate::{
     ast::{DataType, ExpressionEnum},
     lexing::Token,
 };
+use crate::parsing::sub_expression_parser::SubExpressionParser;
 
 use super::{
     expression_parser::ExpressionParser, scope_stack::ScopeStack, DataTypeParser, ParsingResult,
@@ -64,6 +65,6 @@ impl<'a> ExpressionCastParser<'a> {
         let expr = self.to_be_casted.build().unwrap();
         let dt = self.current_data_type.build();
 
-        return ExpressionEnum::ExpressionCast(Box::new(expr), dt.produce_string());
+        return ExpressionEnum::ExpressionCast(Box::new(expr.into()), dt.produce_string());
     }
 }

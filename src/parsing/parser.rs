@@ -9,6 +9,7 @@ use crate::{
 };
 use std::borrow::Borrow;
 use std::{cell::RefCell, collections::HashMap, error::Error, fmt::Display};
+use crate::parsing::sub_expression_parser::SubExpressionParser;
 
 use super::{
     data_type_parser::DataTypeParser, expression_parser::ExpressionParser, scope_stack::ScopeStack,
@@ -114,12 +115,7 @@ impl Parser {
             return Err(Box::new(MissingToken));
         }
         let mut token = self.next();
-        let mut expression_parser = ExpressionParser::with_scope_stack(&self.scope_stack);
-        while expression_parser.consume(token)? {
-            token = self.next();
-        }
-        let condition = expression_parser.build().unwrap();
-        // dbg!(&condition);
+        let condition = self.parse_expression()?;
         if self.current_token() != Token::OpenCurly {
             return Err(Box::new(MissingToken));
         }
@@ -153,7 +149,7 @@ impl Parser {
             self.next();
         }
 
-        let mut built_expression = expr_parser.build().unwrap();
+        let mut built_expression: Expression = expr_parser.build().unwrap().into();
         if checked {
             built_expression.attach_data_types(&self.scope_stack, &self.data_types);
         }

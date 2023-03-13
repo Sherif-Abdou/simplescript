@@ -5,6 +5,8 @@ use crate::{
     ast::{DataType, ExpressionEnum, Scope, UnaryExpressionType},
     lexing::Token,
 };
+use crate::parsing::ParsingError;
+use crate::parsing::sub_expression_parser::SubExpressionParser;
 
 use super::{
     expression_cast_parser::ExpressionCastParser, function_call_parser::FunctionCallParser,
@@ -21,10 +23,9 @@ pub struct ExpressionParser<'a> {
     // top_expression: Option<Expression>,
     expression_stack: VecDeque<ExpressionEnum>,
     scope_stack: Option<&'a ScopeStack>,
-    parser_stack: VecDeque<ExpressionParser<'a>>,
+    parser_stack: VecDeque<Box<dyn SubExpressionParser<'a> + 'a>>,
     waiting_variable_name: Option<String>,
     waiting_unary_operation: Option<WaitingUnaryTypes>,
-    waiting_function_parser: Option<Box<FunctionCallParser<'a>>>,
     waiting_data_type_parser: Option<Box<ExpressionCastParser<'a>>>,
     pub data_types: Option<&'a HashMap<String, DataType>>,
     was_last_binary: bool,
@@ -39,7 +40,6 @@ impl<'a> ExpressionParser<'a> {
             parser_stack: VecDeque::new(),
             waiting_variable_name: None,
             waiting_unary_operation: None,
-            waiting_function_parser: None,
             waiting_data_type_parser: None,
             data_types: None,
             was_last_binary: false,
@@ -51,222 +51,6 @@ impl<'a> ExpressionParser<'a> {
         let mut new = Self::new();
         new.scope_stack = Some(stack);
         return new;
-    }
-
-    pub fn consume(&mut self, token: Token) -> ParsingResult<bool> {
-        if let Some(ref mut parser) = self.waiting_data_type_parser {
-            if !parser.consume(token)? {
-                let res = parser.build();
-                self.waiting_data_type_parser = None;
-                self.append_expr(res);
-            }
-            return Ok(true);
-        }
-        if let Some(ref mut parser) = self.waiting_function_parser {
-            // dbg!("started parsing function with token");
-            // dbg!(&token);
-            if !parser.consume(token)? {
-                let built = parser.build();
-                self.append_expr(built);
-                self.waiting_function_parser = None;
-            }
-            return Ok(true);
-        }
-        if !self.parser_stack.is_empty() {
-            let can_continue = self
-                .parser_stack
-                .front_mut()
-                .unwrap()
-                .consume(token.clone())?;
-            if can_continue {
-                return Ok(true);
-            }
-            let sub_expression = self.parser_stack.pop_front().unwrap().build();
-            // dbg!(&self.expression_stack, &sub_expression);
-
-            match token {
-                Token::CloseSquare => {
-                    if let Some(ExpressionEnum::Array(_)) = self.expression_stack.front() {
-                        let Some(ExpressionEnum::Array(mut arr)) = self.expression_stack.pop_front() else {
-                            panic!();
-                        };
-                        if sub_expression.is_some() {
-                            arr.push(sub_expression.unwrap());
-                        }
-                        self.expression_stack.push_front(ExpressionEnum::Array(arr));
-                        return Ok(false);
-                    } else if let Some(ref name) = self.waiting_variable_name {
-                        // dbg!(&self.expression_stack, &sub_expression);
-                        let new_value = ExpressionEnum::VariableExtract(
-                            name.clone(),
-                            Box::new(sub_expression.unwrap()),
-                        );
-                        self.waiting_variable_name = None;
-                        // dbg!(&self.expression_stack);
-                        self.append_expr(new_value);
-                        // dbg!(&self.expression_stack);
-                        return Ok(true);
-                    }
-                }
-                Token::Comma => {
-                    if let ExpressionEnum::Array(mut arr) =
-                        self.expression_stack.pop_front().unwrap()
-                    {
-                        arr.push(sub_expression.unwrap());
-                        self.expression_stack.push_front(ExpressionEnum::Array(arr));
-                        self.parser_stack
-                            .push_front(ExpressionParser::with_scope_stack(
-                                &self.scope_stack.unwrap(),
-                            ));
-                    }
-                }
-                Token::CloseParenth => {
-                    if let Some(new_expression) = sub_expression {
-                        self.append_expr(new_expression.into());
-                        self.was_last_binary = false;
-                    }
-                }
-                _ => panic!(),
-            }
-            return Ok(true);
-        }
-        self.check_variable(&token);
-
-        // dbg!(&token);
-        let unary_mode = self.was_last_binary || self.expression_stack.is_empty();
-
-        match token {
-            Token::Integer(v) => {
-                let mini_expr = ExpressionEnum::IntegerLiteral(v);
-                self.append_expr(mini_expr);
-            }
-            Token::Float(v) => {
-                self.append_expr(ExpressionEnum::FloatLiteral(v));
-            }
-            Token::String(v) => {
-                self.append_expr(ExpressionEnum::StringLiteral(v));
-            }
-            Token::Char(v) => {
-                self.append_expr(ExpressionEnum::CharLiteral(v));
-            }
-            Token::Plus => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Addition,
-            )),
-            Token::Lesser => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Less,
-            )),
-            Token::LesserEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::LessEqual,
-            )),
-            Token::Greater => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Greater,
-            )),
-            Token::GreaterEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::GreaterEqual,
-            )),
-            Token::NotEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::NotEqual,
-            )),
-            Token::DoubleEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Equal,
-            )),
-            Token::Minus if !unary_mode => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Subtraction,
-            )),
-            Token::Star if !unary_mode => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Multiplication,
-            )),
-            Token::Star if unary_mode => {
-                self.waiting_unary_operation = Some(WaitingUnaryTypes::Dereference)
-            }
-            Token::Ampersand if unary_mode => {
-                self.waiting_unary_operation = Some(WaitingUnaryTypes::Reference)
-            }
-            Token::Minus if unary_mode => {
-                self.waiting_unary_operation = Some(WaitingUnaryTypes::Negation)
-            }
-            Token::Slash => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Division,
-            )),
-            Token::OpenSquare => {
-                //        dbg!("Open Square reached", &self.expression_stack);
-                if self.expression_stack.is_empty() && self.waiting_variable_name.is_none() {
-                    let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
-                    self.parser_stack.push_front(new_parser);
-                    self.append_expr(ExpressionEnum::Array(Vec::new()));
-                } else {
-                    // dbg!(&self.expression_stack);
-                    let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
-                    self.parser_stack.push_front(new_parser);
-                }
-            }
-            Token::Identifier(ref name) => {
-                // dbg!("Looking for variable");
-                if !self.check_stack {
-                    self.waiting_variable_name = Some(name.clone());
-                    return Ok(true);
-                }
-                if let Some(stack) = self.scope_stack {
-                    if stack.get_variable(&name).is_some() {
-                        self.waiting_variable_name = Some(name.clone());
-                        //            self.append_expr(Expression::VariableRead(name.clone()));
-                        return Ok(true);
-                    } else if stack.contains_function(&name) {
-                        let mut function_parser = Box::new(FunctionCallParser::new(stack));
-                        function_parser.consume(Token::Identifier(name.clone()))?;
-                        self.waiting_function_parser = Some(function_parser);
-                    } else {
-                        self.waiting_data_type_parser = Some(Box::new(ExpressionCastParser::new(
-                            &self.scope_stack.unwrap(),
-                            &self.data_types.unwrap(),
-                        )));
-                        self.waiting_data_type_parser
-                            .as_mut()
-                            .unwrap()
-                            .consume(token)?;
-                    }
-                } else {
-                }
-            }
-            Token::OpenParenth => {
-                self.parser_stack.push_front(
-                    self.scope_stack
-                        .map(|v| ExpressionParser::with_scope_stack(v))
-                        .unwrap_or(ExpressionParser::new()),
-                );
-            }
-            Token::EOL => return Ok(false),
-            Token::Comma => return Ok(false),
-            Token::Colon => return Ok(false),
-            Token::CloseParenth => return Ok(false),
-            Token::CloseSquare => return Ok(false),
-            Token::ClosedCurly => return Ok(false),
-            Token::OpenCurly => return Ok(false),
-            Token::Equal => return Ok(false),
-            _ => panic!("Didn't expect {:?}", token),
-        };
-
-        Ok(true)
     }
 
     fn check_variable(&mut self, token: &Token) {
@@ -283,21 +67,7 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    pub fn build(&mut self) -> Option<Expression> {
-        // dbg!(&self.expression_stack);
-        if let ExpressionEnum::Array(_) = self.expression_stack.front()? {
-            return Some(self.expression_stack.front()?.clone().into());
-        }
-        let mut current = self.expression_stack.pop_front();
-        while !self.expression_stack.is_empty() {
-            if self.front().is_binary() && !self.binary_right() {
-                self.binary_set_right(current);
-            }
-            current = self.expression_stack.pop_front();
-        }
 
-        return Some(current.unwrap().into());
-    }
 
     fn append_expr(&mut self, expression: ExpressionEnum) {
         self.was_last_binary = expression.is_binary();
@@ -385,6 +155,230 @@ impl<'a> ExpressionParser<'a> {
             return r.is_some();
         }
         false
+    }
+}
+
+impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
+    fn consume(&mut self, token: Token) -> ParsingResult<bool> {
+        if let Some(ref mut parser) = self.waiting_data_type_parser {
+            if !parser.consume(token)? {
+                let res = parser.build();
+                self.waiting_data_type_parser = None;
+                self.append_expr(res);
+            }
+            return Ok(true);
+        }
+        if !self.parser_stack.is_empty() {
+            let can_continue = self
+                .parser_stack
+                .front_mut()
+                .unwrap()
+                .consume(token.clone())?;
+            if can_continue {
+                return Ok(true);
+            }
+            let sub_expression = self.parser_stack.pop_front().unwrap().build();
+            // dbg!(&self.expression_stack, &sub_expression);
+
+            match token {
+                Token::CloseSquare => {
+                    if let Some(ExpressionEnum::Array(_)) = self.expression_stack.front() {
+                        let Some(ExpressionEnum::Array(mut arr)) = self.expression_stack.pop_front() else {
+                            panic!();
+                        };
+                        if sub_expression.is_some() {
+                            arr.push(sub_expression.unwrap().into());
+                        }
+                        self.expression_stack.push_front(ExpressionEnum::Array(arr));
+                        return Ok(false);
+                    } else if let Some(ref name) = self.waiting_variable_name {
+                        // dbg!(&self.expression_stack, &sub_expression);
+                        let new_value = ExpressionEnum::VariableExtract(
+                            name.clone(),
+                            Box::new(sub_expression.unwrap().into()),
+                        );
+                        self.waiting_variable_name = None;
+                        // dbg!(&self.expression_stack);
+                        self.append_expr(new_value);
+                        // dbg!(&self.expression_stack);
+                        return Ok(true);
+                    }
+                }
+                Token::Comma => {
+                    if let ExpressionEnum::Array(mut arr) =
+                        self.expression_stack.pop_front().unwrap()
+                    {
+                        arr.push(sub_expression.unwrap().into());
+                        self.expression_stack.push_front(ExpressionEnum::Array(arr));
+                        self.parser_stack
+                            .push_front(Box::new(ExpressionParser::with_scope_stack(
+                                &self.scope_stack.unwrap(),
+                            )));
+                    }
+                }
+                _ => {
+                    if let Some(new_expression) = sub_expression {
+                        self.append_expr(new_expression.into());
+                        self.was_last_binary = false;
+                    }
+                }
+            }
+            return Ok(true);
+        }
+        self.check_variable(&token);
+
+        // dbg!(&token);
+        let unary_mode = self.was_last_binary || self.expression_stack.is_empty();
+
+        match token {
+            Token::Integer(v) => {
+                let mini_expr = ExpressionEnum::IntegerLiteral(v);
+                self.append_expr(mini_expr);
+            }
+            Token::Float(v) => {
+                self.append_expr(ExpressionEnum::FloatLiteral(v));
+            }
+            Token::String(v) => {
+                self.append_expr(ExpressionEnum::StringLiteral(v));
+            }
+            Token::Char(v) => {
+                self.append_expr(ExpressionEnum::CharLiteral(v));
+            }
+            Token::Plus => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::Addition,
+            )),
+            Token::Lesser => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::Less,
+            )),
+            Token::LesserEqual => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::LessEqual,
+            )),
+            Token::Greater => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::Greater,
+            )),
+            Token::GreaterEqual => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::GreaterEqual,
+            )),
+            Token::NotEqual => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::NotEqual,
+            )),
+            Token::DoubleEqual => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::Equal,
+            )),
+            Token::Minus if !unary_mode => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::Subtraction,
+            )),
+            Token::Star if !unary_mode => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::Multiplication,
+            )),
+            Token::Star if unary_mode => {
+                self.waiting_unary_operation = Some(WaitingUnaryTypes::Dereference)
+            }
+            Token::Ampersand if unary_mode => {
+                self.waiting_unary_operation = Some(WaitingUnaryTypes::Reference)
+            }
+            Token::Minus if unary_mode => {
+                self.waiting_unary_operation = Some(WaitingUnaryTypes::Negation)
+            }
+            Token::Slash => self.append_expr(ExpressionEnum::Binary(
+                None,
+                None,
+                crate::ast::BinaryExpressionType::Division,
+            )),
+            Token::OpenSquare => {
+                //        dbg!("Open Square reached", &self.expression_stack);
+                if self.expression_stack.is_empty() && self.waiting_variable_name.is_none() {
+                    let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
+                    self.parser_stack.push_front(Box::new(new_parser));
+                    self.append_expr(ExpressionEnum::Array(Vec::new()));
+                } else {
+                    // dbg!(&self.expression_stack);
+                    let new_parser = ExpressionParser::with_scope_stack(&self.scope_stack.unwrap());
+                    self.parser_stack.push_front(Box::new(new_parser));
+                }
+            }
+            Token::Identifier(ref name) => {
+                // dbg!("Looking for variable");
+                if !self.check_stack {
+                    self.waiting_variable_name = Some(name.clone());
+                    return Ok(true);
+                }
+                if let Some(stack) = self.scope_stack {
+                    if stack.get_variable(&name).is_some() {
+                        self.waiting_variable_name = Some(name.clone());
+                        //            self.append_expr(Expression::VariableRead(name.clone()));
+                        return Ok(true);
+                    } else if stack.contains_function(&name) {
+                        let mut function_parser = Box::new(FunctionCallParser::new(stack));
+                        function_parser.consume(Token::Identifier(name.clone()))?;
+                        self.parser_stack.push_front(function_parser);
+                    } else {
+                        self.waiting_data_type_parser = Some(Box::new(ExpressionCastParser::new(
+                            &self.scope_stack.unwrap(),
+                            &self.data_types.unwrap(),
+                        )));
+                        self.waiting_data_type_parser
+                            .as_mut()
+                            .unwrap()
+                            .consume(token)?;
+                    }
+                } else {
+                }
+            }
+            Token::OpenParenth => {
+                self.parser_stack.push_front(
+                    self.scope_stack
+                        .map(|v| ExpressionParser::with_scope_stack(v))
+                        .map(Box::new)
+                        .unwrap_or(Box::new(ExpressionParser::new())),
+                );
+            }
+            Token::EOL => return Ok(false),
+            Token::Comma => return Ok(false),
+            Token::Colon => return Ok(false),
+            Token::CloseParenth => return Ok(false),
+            Token::CloseSquare => return Ok(false),
+            Token::ClosedCurly => return Ok(false),
+            Token::OpenCurly => return Ok(false),
+            Token::Equal => return Ok(false),
+            _ => panic!("Didn't expect {:?}", token),
+        };
+
+        Ok(true)
+    }
+
+    fn build(&mut self) -> Option<ExpressionEnum> {
+        // dbg!(&self.expression_stack);
+        if let ExpressionEnum::Array(_) = self.expression_stack.front()? {
+            return Some(self.expression_stack.front()?.clone().into());
+        }
+        let mut current = self.expression_stack.pop_front();
+        while !self.expression_stack.is_empty() {
+            if self.front().is_binary() && !self.binary_right() {
+                self.binary_set_right(current);
+            }
+            current = self.expression_stack.pop_front();
+        }
+
+        return Some(current.unwrap().into());
     }
 }
 
