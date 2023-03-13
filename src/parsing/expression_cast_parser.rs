@@ -61,7 +61,6 @@ impl<'a> ExpressionCastParser<'a> {
     }
 
     pub fn build(&mut self) -> ExpressionEnum {
-        dbg!("Building");
         let expr = self.to_be_casted.build().unwrap();
         let dt = self.current_data_type.build();
 

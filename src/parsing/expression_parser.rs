@@ -91,7 +91,7 @@ impl<'a> ExpressionParser<'a> {
                             panic!();
                         };
                         if sub_expression.is_some() {
-                            arr.push(sub_expression.unwrap().into());
+                            arr.push(sub_expression.unwrap());
                         }
                         self.expression_stack.push_front(ExpressionEnum::Array(arr));
                         return Ok(false);
@@ -99,7 +99,7 @@ impl<'a> ExpressionParser<'a> {
                         // dbg!(&self.expression_stack, &sub_expression);
                         let new_value = ExpressionEnum::VariableExtract(
                             name.clone(),
-                            Box::new(sub_expression.unwrap().into()),
+                            Box::new(sub_expression.unwrap()),
                         );
                         self.waiting_variable_name = None;
                         // dbg!(&self.expression_stack);
