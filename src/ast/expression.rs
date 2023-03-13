@@ -151,7 +151,6 @@ impl Statement for Expression {
         }
 
         if let ExpressionEnum::VariableExtract(_, _) = &self.expression_enum {
-            // dbg!("Doing thing for extract");
             let location = self.expression_location(data).unwrap();
 
             return Some(Box::new(data.builder.build_load(location, "__tmp__")));
@@ -236,10 +235,10 @@ impl Expression {
     }
 
     pub fn expression_location<'a>(&'a self, data: &'a Compiler) -> Option<PointerValue<'a>> {
-        if let ExpressionEnum::VariableExtract(ref name, ref slot) = self.expression_enum {
-            // dbg!("Doing thing for extract");
+        if let ExpressionEnum::VariableExtract(ref location, ref slot) = self.expression_enum {
 
-            let ptr = data.variable_table.borrow()[name];
+            // let ptr = data.variable_table.borrow()[name];
+            let ptr: PointerValue = location.expression_location(data)?;
             let slot_value = slot
                 .visit(data)
                 .unwrap()
@@ -247,7 +246,7 @@ impl Expression {
                 .into_int_value();
             unsafe {
                 let zero = data.context.i64_type().const_zero();
-                let indices: Vec<IntValue> = match self.data_type {
+                let indices: Vec<IntValue> = match location.data_type {
                     Some(ref v) => {
                         match v.value {
                             DataTypeEnum::Array(_,_) => vec![zero, slot_value],
@@ -261,7 +260,6 @@ impl Expression {
                     &indices,
                     "__tmp__",
                 );
-                // let type_changed = data.builder.build_pointer_cast(new_location, data.context.i64_type().ptr_type(AddressSpace::default()), "__tmp__");
 
                 return Some(new_location);
             }
@@ -365,6 +363,7 @@ impl Expression {
 
             return Box::new(value.as_any_value_enum());
         }
+        dbg!(&parsed_left, &parsed_right);
         unimplemented!()
     }
 
@@ -394,11 +393,9 @@ impl Expression {
                 )),
                 _ => unimplemented!(),
             };
-            // let res =
 
             return Some(result);
         }
-        // let dt = DataTypeParser::new(data_types)
         None
     }
 }
@@ -414,7 +411,7 @@ pub enum ExpressionEnum {
     FunctionCall(String, Vec<Expression>),
     Array(Vec<Expression>),
     VariableRead(String),
-    VariableExtract(String, Box<Expression>),
+    VariableExtract(Box<Expression>, Box<Expression>),
     IntegerLiteral(i64),
     FloatLiteral(f64),
     StringLiteral(String),
@@ -521,20 +518,25 @@ impl ExpressionEnum {
             ExpressionEnum::StringLiteral(ref s) => Some(format!("[char:{}]", s.len())),
             ExpressionEnum::CharLiteral(_) => Some("char".to_string()),
             ExpressionEnum::Array(ref list) => {
-                // dbg!("is array");
                 Some(format!(
                     "[{}:{}]",
                     list[0].data_type.as_ref()?.symbol,
                     list.len()
                 ))
             }
-            ExpressionEnum::VariableExtract(ref name, _) => {
-                let data_type = &scope.get_variable(name).unwrap().data_type;
+            ExpressionEnum::VariableExtract(ref location, _) => {
+                let data_type = location.data_type.clone()?;
                 // For arrays, ignoring structs right now
-                if let DataTypeEnum::Array(ref a, _) = data_type.value {
-                    Some(a.symbol.clone())
-                } else {
-                    None
+                match data_type.value {
+                    DataTypeEnum::Array(ref a, _) => {
+                        Some(a.symbol.clone())
+                    },
+                    DataTypeEnum::Pointer(ref interior) => {
+                        Some(interior.symbol.clone())
+                    },
+                    _ => {
+                        None
+                    }
                 }
             }
             ExpressionEnum::FunctionCall(name, _) => {
@@ -592,7 +594,7 @@ impl ExpressionEnum {
 
         let new_expression = ExpressionEnum::Binary(expr.map(|v| Box::new(v.into())), r, t);
 
-        new_expression.into()
+        new_expression
     }
 
     pub fn binary_set_right(self, expr: Option<ExpressionEnum>) -> ExpressionEnum {
@@ -603,6 +605,6 @@ impl ExpressionEnum {
 
         let new_expression = ExpressionEnum::Binary(l, expr.map(|v| Box::new(v.into())), t);
 
-        new_expression.into()
+        new_expression
     }
 }

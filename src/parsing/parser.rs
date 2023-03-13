@@ -93,7 +93,6 @@ impl Parser {
                 let expression = self
                     .parse_expression_choice(false)
                     .expect("Couldn't parse expected expression");
-                // dbg!(&expression);
                 self.parse_insert_value(expression)?;
             } else if Token::ClosedCurly == self.current_token() {
                 let mut thing = self.scope_stack.pop_front().unwrap();
@@ -130,7 +129,6 @@ impl Parser {
             return Err(Box::new(MissingToken));
         }
         self.next();
-        // // dbg!("Did return");
         let value = self.parse_expression()?;
         let command = ReturnCommand::new(value);
         self.scope_stack.commands_mut().push(Box::new(command));
@@ -159,18 +157,6 @@ impl Parser {
     fn parse_set_variable(&mut self, iden: &str) -> ParsingResult<()> {
         let val = self.current_token();
         if val == Token::Colon {
-            // let data_type_iden = self.next();
-            // if let Token::Identifier(ref data_iden) = data_type_iden {
-            //     let variable = Variable {
-            //         name: iden.to_string(),
-            //         data_type: self.data_types[data_iden].clone(),
-            //     };
-            //     // dbg!("setting variable");
-            //     self.scope_stack.set_variable(variable);
-            //     val = self.next()
-            // } else {
-            //     panic!("Missing data type");
-            // }
             let mut data_type_parser = DataTypeParser::new(&self.data_types);
             while data_type_parser.consume(self.next()) {}
             let data_type = data_type_parser.build();
@@ -178,7 +164,6 @@ impl Parser {
                 name: iden.to_string(),
                 data_type,
             };
-            // dbg!("setting variable");
             self.scope_stack.set_variable(variable);
         }
         if self.current_token() != Token::Equal {
@@ -193,7 +178,6 @@ impl Parser {
                 name: iden.to_string(),
                 data_type: self.expression_type(&expr),
             };
-            // dbg!("setting variable");
             self.scope_stack.set_variable(variable);
         }
         let data_type = self
@@ -221,11 +205,6 @@ impl Parser {
     }
 
     fn expression_type(&mut self, expr: &Expression) -> DataType {
-        // let mut data_type_parser = DataTypeParser::new(&self.data_types);
-        // let thing = expr.data_type(&self.scope_stack).unwrap();
-
-        // let data_type = data_type_parser.parse_string(thing);
-        // data_type
         let borrowed: &ExpressionEnum = expr.borrow();
         borrowed
             .expression_type(&self.scope_stack, &self.data_types)

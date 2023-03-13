@@ -5,6 +5,7 @@ use crate::{
     ast::{DataType, ExpressionEnum, Scope, UnaryExpressionType},
     lexing::Token,
 };
+use crate::ast::ExpressionEnum::VariableRead;
 
 use crate::parsing::sub_expression_parser::SubExpressionParser;
 
@@ -72,7 +73,6 @@ impl<'a> ExpressionParser<'a> {
     fn append_expr(&mut self, expression: ExpressionEnum) {
         self.was_last_binary = expression.is_binary();
         if self.waiting_unary_operation.is_some() {
-            // dbg!("unary thing");
             let new_expression = match self.waiting_unary_operation.as_ref().unwrap() {
                 WaitingUnaryTypes::Reference => ExpressionEnum::Unary(
                     Some(Box::new(expression.into())),
@@ -178,7 +178,6 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
                 return Ok(true);
             }
             let sub_expression = self.parser_stack.pop_front().unwrap().build();
-            // dbg!(&self.expression_stack, &sub_expression);
 
             match token {
                 Token::CloseSquare => {
@@ -192,15 +191,12 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
                         self.expression_stack.push_front(ExpressionEnum::Array(arr));
                         return Ok(false);
                     } else if let Some(ref name) = self.waiting_variable_name {
-                        // dbg!(&self.expression_stack, &sub_expression);
                         let new_value = ExpressionEnum::VariableExtract(
-                            name.clone(),
+                            Box::new(VariableRead(name.to_string()).into()),
                             Box::new(sub_expression.unwrap().into()),
                         );
                         self.waiting_variable_name = None;
-                        // dbg!(&self.expression_stack);
                         self.append_expr(new_value);
-                        // dbg!(&self.expression_stack);
                         return Ok(true);
                     }
                 }
@@ -304,19 +300,16 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
                 crate::ast::BinaryExpressionType::Division,
             )),
             Token::OpenSquare => {
-                //        dbg!("Open Square reached", &self.expression_stack);
                 if self.expression_stack.is_empty() && self.waiting_variable_name.is_none() {
                     let new_parser = ExpressionParser::with_scope_stack(self.scope_stack.unwrap());
                     self.parser_stack.push_front(Box::new(new_parser));
                     self.append_expr(ExpressionEnum::Array(Vec::new()));
                 } else {
-                    // dbg!(&self.expression_stack);
                     let new_parser = ExpressionParser::with_scope_stack(self.scope_stack.unwrap());
                     self.parser_stack.push_front(Box::new(new_parser));
                 }
             }
             Token::Identifier(ref name) => {
-                // dbg!("Looking for variable");
                 if !self.check_stack {
                     self.waiting_variable_name = Some(name.clone());
                     return Ok(true);
@@ -395,7 +388,6 @@ mod test {
         expression_parser.consume(number).expect("Some error");
         let expr = expression_parser.build().unwrap();
 
-        // assert_eq!(expr, ExpressionEnum::IntegerLiteral(24));
     }
 
     #[test]
@@ -408,7 +400,6 @@ mod test {
         }
 
         let expr = expression_parser.build().unwrap();
-        // assert_eq!(expr, Binary(Some(Box::new(IntegerLiteral(24))), Some(Box::new(IntegerLiteral(7))), Addition))
     }
 
     #[test]

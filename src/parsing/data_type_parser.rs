@@ -28,7 +28,6 @@ impl<'a> DataTypeParser<'a> {
     pub fn parse_string(&mut self, string: String) -> DataType {
         let mut lexer = Lexer::new(string);
         let mut token = lexer.next();
-        // dbg!(&token);
         while self.consume(token) {
             token = lexer.next();
         }
@@ -37,10 +36,6 @@ impl<'a> DataTypeParser<'a> {
     }
 
     pub fn consume(&mut self, token: Token) -> bool {
-        // dbg!(&token);
-        // if token == Token::EOF {
-        // dbg!(&self.internal_type);
-        // }
         match token {
             Token::OpenSquare => {
                 if self.build_type.is_none() {
@@ -48,7 +43,6 @@ impl<'a> DataTypeParser<'a> {
                 }
             }
             Token::Identifier(iden) => {
-                // dbg!(&iden);
                 self.internal_type = Some(self.data_types[&iden].clone());
                 if let Some(BuildType::Reference) = &self.build_type {
                     self.internal_type = Some(DataType {
