@@ -25,7 +25,7 @@ pub struct ExpressionCastParser<'a> {
 
 impl<'a> ExpressionCastParser<'a> {
     pub fn new(scope: &'a ScopeStack, data_types: &'a HashMap<String, DataType>) -> Self {
-        let mut to_be_casted = ExpressionParser::with_scope_stack(&scope);
+        let mut to_be_casted = ExpressionParser::with_scope_stack(scope);
         to_be_casted.data_types = Some(data_types);
         let current_data_type = DataTypeParser::new(data_types);
         Self {
@@ -65,6 +65,6 @@ impl<'a> ExpressionCastParser<'a> {
         let expr = self.to_be_casted.build().unwrap();
         let dt = self.current_data_type.build();
 
-        return ExpressionEnum::ExpressionCast(Box::new(expr.into()), dt.produce_string());
+        ExpressionEnum::ExpressionCast(Box::new(expr.into()), dt.produce_string())
     }
 }

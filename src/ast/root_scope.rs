@@ -1,7 +1,6 @@
 use crate::ast::{Compiler, Scope, Statement, Variable};
 use inkwell::values::AnyValue;
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use super::DataType;
 
@@ -40,19 +39,19 @@ impl Scope for RootScope {
         &mut self.commands
     }
 
-    fn scope_type(&self) -> &'static str {
-        "root"
-    }
-
     fn contains_function(&self, name: &str) -> bool {
         self.functions.contains_key(name)
+    }
+
+    fn return_type_of(&self, name: &str) -> Option<DataType> {
+        self.functions[name].clone()
     }
 
     fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
         self.functions.insert(name.to_owned(), return_type);
     }
 
-    fn return_type_of(&self, name: &str) -> Option<DataType> {
-        self.functions[name].clone()
+    fn scope_type(&self) -> &'static str {
+        "root"
     }
 }

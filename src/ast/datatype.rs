@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::format, hash::Hash};
+use std::{collections::HashMap, hash::Hash};
 
 use inkwell::{
     context::Context,
@@ -58,7 +58,7 @@ impl DataType {
         &self,
         compiler: &'a Context,
         data_types: &DataTypeVector,
-        names: &NameMap,
+        _names: &NameMap,
     ) -> Box<dyn BasicType<'a> + 'a> {
         let v: Vec<BasicTypeEnum> = data_types
             .iter()

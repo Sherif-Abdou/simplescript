@@ -120,7 +120,7 @@ impl Lexer {
                     escaped = false;
                 }
             }
-            assert!(string.len() == 1);
+            assert_eq!(string.len(), 1);
             self.pop();
             return Token::Char(string.as_bytes()[0].clone());
         }
@@ -187,8 +187,8 @@ mod test {
 
         let mut lexer = Lexer::new(raw);
         let expected_tokens = &[
-            Token::Def,
-            Token::Identifier("hello".into()),
+            Def,
+            Identifier("hello".into()),
             OpenParenth,
             CloseParenth,
             OpenCurly,

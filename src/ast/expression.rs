@@ -1,14 +1,11 @@
 use crate::ast::DataType;
 use crate::parsing::DataTypeParser;
 use inkwell::{
-    types::BasicType,
     values::{
         AnyValue, AnyValueEnum, ArrayValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum,
         FloatValue, IntValue, PointerValue, StructValue,
-    },
-    AddressSpace, FloatPredicate, IntPredicate,
+    }, FloatPredicate, IntPredicate,
 };
-use std::any::Any;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
@@ -27,7 +24,7 @@ impl Borrow<ExpressionEnum> for Expression {
 }
 
 impl Statement for Expression {
-    fn visit<'a>(&'a self, data: &'a super::statement::Compiler) -> Option<Box<dyn AnyValue + 'a>> {
+    fn visit<'a>(&'a self, data: &'a Compiler) -> Option<Box<dyn AnyValue + 'a>> {
         if let ExpressionEnum::Binary(left, right, binary_type) = &self.expression_enum {
             let parsed_left = left.as_ref().unwrap().visit(data)?.as_any_value_enum();
             let parsed_right = right.as_ref().unwrap().visit(data)?.as_any_value_enum();
@@ -40,9 +37,9 @@ impl Statement for Expression {
         }
 
         if let ExpressionEnum::Unary(Some(interior), operation) = &self.expression_enum {
-            match operation {
+            return match operation {
                 UnaryExpressionType::Reference => {
-                    return Some(Box::new(interior.expression_location(data).unwrap()));
+                    Some(Box::new(interior.expression_location(data).unwrap()))
                 }
                 UnaryExpressionType::Dereference => {
                     let location = interior
@@ -50,19 +47,19 @@ impl Statement for Expression {
                         .unwrap()
                         .as_any_value_enum()
                         .into_pointer_value();
-                    return Some(Box::new(data.builder.build_load(location, "__tmp__")));
+                    Some(Box::new(data.builder.build_load(location, "__tmp__")))
                 }
             }
         };
 
         if let ExpressionEnum::VariableRead(variable_name) = &self.expression_enum {
-            if let Some(param) = data.current_function_params.borrow().get(variable_name) {
-                return Some(Box::new(param.as_basic_value_enum()));
+            return if let Some(param) = data.current_function_params.borrow().get(variable_name) {
+                Some(Box::new(param.as_basic_value_enum()))
             } else {
                 let load = data
                     .builder
                     .build_load(self.expression_location(data).unwrap(), variable_name);
-                return Some(Box::new(load));
+                Some(Box::new(load))
             }
         }
 
@@ -199,9 +196,9 @@ impl From<ExpressionEnum> for Expression {
     }
 }
 
-impl Into<ExpressionEnum> for Expression {
-    fn into(self) -> ExpressionEnum {
-        self.expression_enum
+impl From<Expression> for ExpressionEnum {
+    fn from(expr: Expression) -> Self {
+        expr.expression_enum
     }
 }
 
@@ -414,7 +411,7 @@ pub enum ExpressionEnum {
         BinaryExpressionType,
     ),
     Unary(Option<Box<Expression>>, UnaryExpressionType),
-    FunctionCall(String, Vec<Box<Expression>>),
+    FunctionCall(String, Vec<Expression>),
     Array(Vec<Expression>),
     VariableRead(String),
     VariableExtract(String, Box<Expression>),
@@ -440,8 +437,8 @@ pub enum BinaryExpressionType {
 }
 
 impl BinaryExpressionType {
-    // Higher precidence operations are computed first
-    pub fn precidence(&self) -> i64 {
+    // Higher precedence operations are computed first
+    pub fn precedence(&self) -> i64 {
         match self {
             BinaryExpressionType::Addition => 1,
             BinaryExpressionType::Subtraction => 1,
@@ -459,7 +456,7 @@ pub enum UnaryExpressionType {
 }
 
 impl UnaryExpressionType {
-    pub fn precidence(&self) -> i64 {
+    pub fn precedence(&self) -> i64 {
         match self {
             UnaryExpressionType::Reference => 10,
             UnaryExpressionType::Dereference => 10,
@@ -468,10 +465,10 @@ impl UnaryExpressionType {
 }
 
 impl ExpressionEnum {
-    pub fn precidence(&self) -> i64 {
+    pub fn precedence(&self) -> i64 {
         match self {
-            ExpressionEnum::Binary(_, _, t) => t.precidence(),
-            ExpressionEnum::Unary(_, t) => t.precidence(),
+            ExpressionEnum::Binary(_, _, t) => t.precedence(),
+            ExpressionEnum::Unary(_, t) => t.precedence(),
             ExpressionEnum::VariableRead(_) => 100,
             ExpressionEnum::IntegerLiteral(_) => 100,
             ExpressionEnum::FloatLiteral(_) => 100,
@@ -485,9 +482,9 @@ impl ExpressionEnum {
     pub fn data_type(
         &self,
         scope: &dyn Scope,
-        data_types: &HashMap<String, DataType>,
+        _data_types: &HashMap<String, DataType>,
     ) -> Option<String> {
-        match self {
+        return match self {
             ExpressionEnum::Binary(l, r, _) => {
                 if l.as_ref().unwrap().data_type == r.as_ref().unwrap().data_type {
                     return l
@@ -498,7 +495,7 @@ impl ExpressionEnum {
                         .as_ref()
                         .map(|v| v.symbol.clone());
                 }
-                return None;
+                None
             }
             ExpressionEnum::Unary(Some(interior), dt) => {
                 let thing = match dt {
@@ -514,38 +511,38 @@ impl ExpressionEnum {
                         interior.data_type.as_ref().unwrap().symbol[1..].to_string()
                     }
                 };
-                return Some(thing);
+                Some(thing)
             }
             ExpressionEnum::VariableRead(v) => {
-                return Some(scope.get_variable(v).unwrap().data_type.symbol.clone())
+                Some(scope.get_variable(v).unwrap().data_type.symbol.clone())
             }
-            ExpressionEnum::IntegerLiteral(_) => return Some("i64".to_string()),
-            ExpressionEnum::FloatLiteral(_) => return Some("f64".to_string()),
-            ExpressionEnum::StringLiteral(ref s) => return Some(format!("[char:{}]", s.len())),
-            ExpressionEnum::CharLiteral(_) => return Some("char".to_string()),
+            ExpressionEnum::IntegerLiteral(_) => Some("i64".to_string()),
+            ExpressionEnum::FloatLiteral(_) => Some("f64".to_string()),
+            ExpressionEnum::StringLiteral(ref s) => Some(format!("[char:{}]", s.len())),
+            ExpressionEnum::CharLiteral(_) => Some("char".to_string()),
             ExpressionEnum::Array(ref list) => {
                 // dbg!("is array");
-                return Some(format!(
+                Some(format!(
                     "[{}:{}]",
                     list[0].data_type.as_ref()?.symbol,
                     list.len()
-                ));
+                ))
             }
             ExpressionEnum::VariableExtract(ref name, _) => {
                 let data_type = &scope.get_variable(name).unwrap().data_type;
                 // For arrays, ignoring structs right now
                 if let DataTypeEnum::Array(ref a, _) = data_type.value {
-                    return Some(a.symbol.clone());
+                    Some(a.symbol.clone())
                 } else {
-                    return None;
+                    None
                 }
             }
             ExpressionEnum::FunctionCall(name, _) => {
                 let result = scope.return_type_of(name).unwrap().produce_string();
-                return Some(result);
+                Some(result)
             }
-            ExpressionEnum::ExpressionCast(_, res) => return Some(res.clone()),
-            _ => return None,
+            ExpressionEnum::ExpressionCast(_, res) => Some(res.clone()),
+            _ => None,
         };
     }
 
@@ -562,7 +559,7 @@ impl ExpressionEnum {
             return Some(data_type);
         }
 
-        if let ExpressionEnum::FunctionCall(name, params) = self {}
+        if let ExpressionEnum::FunctionCall(_, _) = self {}
         None
     }
 
@@ -574,14 +571,14 @@ impl ExpressionEnum {
     }
 
     pub fn binary_get_left(&self) -> &Option<Box<Expression>> {
-        if let ExpressionEnum::Binary(l, r, t) = self {
+        if let ExpressionEnum::Binary(l, _, _) = self {
             return l;
         }
         panic!()
     }
 
     pub fn binary_get_right(&self) -> &Option<Box<Expression>> {
-        if let ExpressionEnum::Binary(l, r, t) = self {
+        if let ExpressionEnum::Binary(_, r, _) = self {
             return r;
         }
         panic!()

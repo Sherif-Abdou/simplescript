@@ -1,9 +1,9 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{HashMap},
 };
 
-use inkwell::types::{AnyType, BasicMetadataTypeEnum};
+use inkwell::types::{BasicMetadataTypeEnum};
 
 use super::{DataType, Scope, Statement, Variable};
 
@@ -50,12 +50,12 @@ impl Scope for Function {
         self.functions.contains_key(name)
     }
 
-    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
-        self.functions.insert(name.to_owned(), return_type);
-    }
-
     fn return_type_of(&self, name: &str) -> Option<DataType> {
         self.functions[name].clone()
+    }
+
+    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
+        self.functions.insert(name.to_owned(), return_type);
     }
 
     fn scope_type(&self) -> &'static str {
@@ -91,8 +91,8 @@ impl Statement for Function {
             let value = values[i];
             param_map.insert(name.clone(), value);
         }
-        let rfcell = RefCell::new(param_map);
-        data.current_function_params.swap(&rfcell);
+        let refcell = RefCell::new(param_map);
+        data.current_function_params.swap(&refcell);
         let block = data.context.append_basic_block(fn_value, "entry");
         data.builder.position_at_end(block);
         data.function_table

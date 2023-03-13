@@ -1,7 +1,7 @@
 use crate::ast::Expression;
-use std::{collections::HashMap, thread::current};
+use std::{collections::HashMap};
 
-use super::{DataType, Function, Scope, Statement, Variable};
+use super::{DataType, Scope, Statement, Variable};
 
 pub struct IfCondition {
     pub commands: Vec<Box<dyn Statement>>,
@@ -20,10 +20,6 @@ impl IfCondition {
 }
 
 impl Scope for IfCondition {
-    fn commands(&self) -> &Vec<Box<dyn Statement>> {
-        &self.commands
-    }
-
     fn get_variable(&self, name: &str) -> Option<&Variable> {
         self.variables.get(name)
     }
@@ -32,25 +28,29 @@ impl Scope for IfCondition {
         self.variables.insert(variable.name.clone(), variable);
     }
 
-    fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>> {
-        &mut self.commands
+    fn commands(&self) -> &Vec<Box<dyn Statement>> {
+        &self.commands
     }
 
-    fn scope_type(&self) -> &'static str {
-        "function"
+    fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>> {
+        &mut self.commands
     }
 
     fn contains_function(&self, name: &str) -> bool {
         false
     }
 
-    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {}
-
-    fn wrap_up_parsing(&mut self, parser: &mut crate::parsing::Parser) {}
-
     fn return_type_of(&self, name: &str) -> Option<DataType> {
         todo!()
     }
+
+    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {}
+
+    fn scope_type(&self) -> &'static str {
+        "function"
+    }
+
+    fn wrap_up_parsing(&mut self, parser: &mut crate::parsing::Parser) {}
 }
 
 impl Statement for IfCondition {

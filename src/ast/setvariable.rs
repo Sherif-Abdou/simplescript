@@ -1,7 +1,7 @@
 use crate::ast::Expression;
 use inkwell::values::{AnyValueEnum, BasicValueEnum};
 
-use super::{DataType, ExpressionEnum, Statement};
+use super::{DataType, Statement};
 
 pub struct SetVariable {
     name: String,

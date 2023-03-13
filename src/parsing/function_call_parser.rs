@@ -6,7 +6,7 @@ use super::{expression_parser::ExpressionParser, scope_stack::ScopeStack, Parsin
 
 pub struct FunctionCallParser<'a> {
     sub_parser: Option<ExpressionParser<'a>>,
-    arguments: Vec<Box<Expression>>,
+    arguments: Vec<Expression>,
     scope_stack: &'a ScopeStack,
     name: String,
 }
@@ -31,7 +31,7 @@ impl<'a> SubExpressionParser<'a> for FunctionCallParser<'a> {
             if !can_continue {
                 let maybe_built = parser.build();
                 if let Some(built) = maybe_built {
-                    self.arguments.push(Box::new(built.into()));
+                    self.arguments.push(built.into());
                 }
             }
             if token != Token::CloseParenth {
@@ -42,7 +42,7 @@ impl<'a> SubExpressionParser<'a> for FunctionCallParser<'a> {
         match token {
             Token::Identifier(name) => self.name = name,
             Token::OpenParenth => {
-                self.sub_parser = Some(ExpressionParser::with_scope_stack(&self.scope_stack))
+                self.sub_parser = Some(ExpressionParser::with_scope_stack(self.scope_stack))
             }
             Token::CloseParenth => {
                 self.sub_parser = None;
@@ -57,7 +57,7 @@ impl<'a> SubExpressionParser<'a> for FunctionCallParser<'a> {
     fn build(&mut self) -> Option<ExpressionEnum> {
         let function_call =
             ExpressionEnum::FunctionCall(self.name.to_owned(), self.arguments.clone());
-        return Some(function_call);
+        Some(function_call)
     }
 
 }

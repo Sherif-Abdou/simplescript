@@ -80,7 +80,7 @@ impl Parser {
                 self.parse_return()?;
             } else if self.current_token() == Token::If {
                 self.parse_if_statement()?;
-            } else if let Token::Identifier(ref name) = self.current_token() {
+            } else if let Token::Identifier(_) = self.current_token() {
                 let expression = self
                     .parse_expression_choice(false)
                     .expect("Couldn't parse expected expression");
@@ -114,7 +114,7 @@ impl Parser {
         if self.current_token() != Token::If {
             return Err(Box::new(MissingToken));
         }
-        let mut token = self.next();
+        let mut _token = self.next();
         let condition = self.parse_expression()?;
         if self.current_token() != Token::OpenCurly {
             return Err(Box::new(MissingToken));
@@ -127,7 +127,7 @@ impl Parser {
 
     fn parse_return(&mut self) -> ParsingResult<()> {
         if self.current_token() != Token::Return {
-            return Err(Box::new(ParsingError::MissingToken));
+            return Err(Box::new(MissingToken));
         }
         self.next();
         // // dbg!("Did return");
@@ -157,7 +157,7 @@ impl Parser {
     }
 
     fn parse_set_variable(&mut self, iden: &str) -> ParsingResult<()> {
-        let mut val = self.current_token();
+        let val = self.current_token();
         if val == Token::Colon {
             // let data_type_iden = self.next();
             // if let Token::Identifier(ref data_iden) = data_type_iden {
@@ -184,7 +184,7 @@ impl Parser {
         if self.current_token() != Token::Equal {
             dbg!("Missing equal");
             dbg!(&self.current_token());
-            return Err(Box::new(ParsingError::MissingToken));
+            return Err(Box::new(MissingToken));
         }
         self.next();
         let expr = self.parse_expression()?;
@@ -234,31 +234,31 @@ impl Parser {
 
     fn parse_function(&mut self) -> ParsingResult<()> {
         if self.current_token() != Token::Def {
-            return Err(Box::new(ParsingError::MissingToken));
+            return Err(Box::new(MissingToken));
         }
 
         let mut func_name = String::new();
 
         {
-            let Token::Identifier(fn_name) = self.next().clone() else {
-                return Err(Box::new(ParsingError::MissingToken));
+            let Token::Identifier(fn_name) = self.next() else {
+                return Err(Box::new(MissingToken));
             };
 
-            func_name = fn_name.clone();
+            func_name = fn_name;
         }
 
         if Token::OpenParenth != self.next() {
-            return Err(Box::new(ParsingError::MissingToken));
+            return Err(Box::new(MissingToken));
         };
         let mut next = self.next();
         let mut params = Vec::new();
         while next != Token::CloseParenth {
             let Token::Identifier(iden) = next.clone() else {
-                return Err(Box::new(ParsingError::MissingToken));
+                return Err(Box::new(MissingToken));
             };
             next = self.next();
             let Token::Colon = next.clone() else {
-                return Err(Box::new(ParsingError::MissingToken));
+                return Err(Box::new(MissingToken));
             };
             next = self.next();
             let mut dt_parser = DataTypeParser::new(&self.data_types);
@@ -283,7 +283,7 @@ impl Parser {
             return_type = Some(data_type_parser.build());
         }
         let Token::OpenCurly = next else {
-            return Err(Box::new(ParsingError::MissingToken));
+            return Err(Box::new(MissingToken));
         };
 
         let mut function = Function::new(return_type.clone());
@@ -298,7 +298,7 @@ impl Parser {
         }
         function.params = params;
         self.scope_stack
-            .add_function(&func_name, return_type.clone());
+            .add_function(&func_name, return_type);
         function.name = func_name.to_string();
         self.scope_stack.push_front(Box::new(function));
 

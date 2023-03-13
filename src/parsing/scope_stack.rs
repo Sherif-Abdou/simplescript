@@ -48,17 +48,13 @@ impl Scope for ScopeStack {
         self.scope_stack[0].set_variable(variable);
     }
 
-    fn commands(&self) -> &Vec<Box<dyn crate::ast::Statement>> {
+    fn commands(&self) -> &Vec<Box<dyn Statement>> {
         self.scope_stack.front().unwrap().commands()
     }
 
-    fn commands_mut(&mut self) -> &mut Vec<Box<dyn crate::ast::Statement>> {
+    fn commands_mut(&mut self) -> &mut Vec<Box<dyn Statement>> {
         let front_scope = self.scope_stack.front_mut().unwrap();
         front_scope.commands_mut()
-    }
-
-    fn scope_type(&self) -> &'static str {
-        "scope_stack"
     }
 
     fn contains_function(&self, name: &str) -> bool {
@@ -70,13 +66,6 @@ impl Scope for ScopeStack {
         false
     }
 
-    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
-        self.scope_stack
-            .front_mut()
-            .unwrap()
-            .add_function(name, return_type);
-    }
-
     fn return_type_of(&self, name: &str) -> Option<DataType> {
         for scope in &self.scope_stack {
             if scope.contains_function(name) {
@@ -84,5 +73,16 @@ impl Scope for ScopeStack {
             }
         }
         panic!()
+    }
+
+    fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
+        self.scope_stack
+            .front_mut()
+            .unwrap()
+            .add_function(name, return_type);
+    }
+
+    fn scope_type(&self) -> &'static str {
+        "scope_stack"
     }
 }
