@@ -1,7 +1,6 @@
 use crate::parsing::Parser;
 
-use super::{variable::Variable, Statement, DataType};
-
+use super::{variable::Variable, DataType, Statement};
 
 pub trait Scope: Statement {
     fn get_variable(&self, name: &str) -> Option<&Variable>;

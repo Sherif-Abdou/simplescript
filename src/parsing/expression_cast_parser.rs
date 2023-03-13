@@ -1,8 +1,13 @@
 use std::collections::HashMap;
 
-use crate::{ast::{DataType, Expression}, lexing::Token};
+use crate::{
+    ast::{DataType, ExpressionEnum},
+    lexing::Token,
+};
 
-use super::{expression_parser::ExpressionParser, scope_stack::ScopeStack, ParsingResult, DataTypeParser};
+use super::{
+    expression_parser::ExpressionParser, scope_stack::ScopeStack, DataTypeParser, ParsingResult,
+};
 
 enum State {
     ParsingDataType,
@@ -22,12 +27,12 @@ impl<'a> ExpressionCastParser<'a> {
         let mut to_be_casted = ExpressionParser::with_scope_stack(&scope);
         to_be_casted.data_types = Some(data_types);
         let current_data_type = DataTypeParser::new(data_types);
-        Self { 
+        Self {
             state: State::ParsingDataType,
-            current_data_type, 
-            to_be_casted, 
+            current_data_type,
+            to_be_casted,
             data_types,
-            scope
+            scope,
         }
     }
 
@@ -41,7 +46,7 @@ impl<'a> ExpressionCastParser<'a> {
                 }
 
                 Ok(true)
-            },
+            }
             State::ParsingExpression => {
                 let can_continue = self.to_be_casted.consume(token.clone())?;
 
@@ -51,15 +56,15 @@ impl<'a> ExpressionCastParser<'a> {
                 }
 
                 Ok(true)
-            },
+            }
         }
     }
 
-    pub fn build(&mut self) -> Expression {
+    pub fn build(&mut self) -> ExpressionEnum {
         dbg!("Building");
         let expr = self.to_be_casted.build().unwrap();
         let dt = self.current_data_type.build();
 
-        return Expression::ExpressionCast(Box::new(expr), dt.produce_string());
+        return ExpressionEnum::ExpressionCast(Box::new(expr), dt.produce_string());
     }
 }

@@ -1,6 +1,11 @@
-use inkwell::{module::Module, context::Context, builder::Builder, values::{AnyValue, PointerValue, FunctionValue, BasicValueEnum}};
-use std::{collections::HashMap, cell::RefCell};
+use inkwell::{
+    builder::Builder,
+    context::Context,
+    module::Module,
+    values::{AnyValue, BasicValueEnum, FunctionValue, PointerValue},
+};
 use std::any::Any;
+use std::{cell::RefCell, collections::HashMap};
 
 use super::DataType;
 
@@ -9,6 +14,7 @@ pub struct Compiler<'ctx> {
     pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
     pub variable_table: RefCell<HashMap<String, PointerValue<'ctx>>>,
+    pub variable_type: RefCell<HashMap<String, DataType>>,
     pub function_table: RefCell<HashMap<String, FunctionValue<'ctx>>>,
     pub current_function_params: RefCell<HashMap<String, BasicValueEnum<'ctx>>>,
     pub data_types: HashMap<String, DataType>,

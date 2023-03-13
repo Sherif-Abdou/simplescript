@@ -1,10 +1,18 @@
-use crate::{lexing::{Lexer, Token}, ast::{Scope, Function, Expression, SetVariable, InsertVariable, ReturnCommand, Variable, DataType, IfCondition}};
-use std::{collections::{HashMap}, error::Error, fmt::Display, cell::RefCell};
-use crate::ast::{RootScope};
+use crate::ast::{Expression, RootScope};
 use crate::parsing::ParsingError::MissingToken;
+use crate::{
+    ast::{
+        DataType, ExpressionEnum, Function, IfCondition, InsertVariable, ReturnCommand, Scope,
+        SetVariable, Variable,
+    },
+    lexing::{Lexer, Token},
+};
+use std::borrow::Borrow;
+use std::{cell::RefCell, collections::HashMap, error::Error, fmt::Display};
 
-use super::{scope_stack::ScopeStack, expression_parser::ExpressionParser, data_type_parser::DataTypeParser};
-
+use super::{
+    data_type_parser::DataTypeParser, expression_parser::ExpressionParser, scope_stack::ScopeStack,
+};
 
 pub struct Parser {
     lexer: RefCell<Lexer>,
@@ -17,7 +25,7 @@ pub type ParsingResult<T> = Result<T, Box<dyn Error>>;
 
 #[derive(Debug)]
 pub enum ParsingError {
-    MissingToken
+    MissingToken,
 }
 
 impl Display for ParsingError {
@@ -32,18 +40,27 @@ impl Parser {
     pub fn new(raw: String) -> Self {
         let mut lexer = Lexer::new(raw);
         let mut data_types = HashMap::new();
-        data_types.insert("i64".to_string(), DataType {
-            symbol: "i64".to_string(),
-            value: crate::ast::DataTypeEnum::Primitive,
-        });
-        data_types.insert("f64".to_string(), DataType {
-            symbol: "f64".to_string(),
-            value: crate::ast::DataTypeEnum::Primitive,
-        });
-        data_types.insert("char".to_string(), DataType {
-            symbol: "char".to_string(),
-            value: crate::ast::DataTypeEnum::Primitive,
-        });
+        data_types.insert(
+            "i64".to_string(),
+            DataType {
+                symbol: "i64".to_string(),
+                value: crate::ast::DataTypeEnum::Primitive,
+            },
+        );
+        data_types.insert(
+            "f64".to_string(),
+            DataType {
+                symbol: "f64".to_string(),
+                value: crate::ast::DataTypeEnum::Primitive,
+            },
+        );
+        data_types.insert(
+            "char".to_string(),
+            DataType {
+                symbol: "char".to_string(),
+                value: crate::ast::DataTypeEnum::Primitive,
+            },
+        );
         let mut scope_stack = ScopeStack::default();
         scope_stack.push_front(Box::new(RootScope::default()));
         Self {
@@ -63,20 +80,28 @@ impl Parser {
             } else if self.current_token() == Token::If {
                 self.parse_if_statement()?;
             } else if let Token::Identifier(ref name) = self.current_token() {
-                let expression = self.parse_expression_choice(false).expect("Couldn't parse expected expression");
-                if let Expression::VariableRead(ref iden) = expression {
+                let expression = self
+                    .parse_expression_choice(false)
+                    .expect("Couldn't parse expected expression");
+                if let ExpressionEnum::VariableRead(ref iden) = expression.borrow() {
                     self.parse_set_variable(iden)?;
                 } else {
                     self.parse_insert_value(expression)?;
                 }
             } else if self.current_token() == Token::Star {
-                let expression = self.parse_expression_choice(false).expect("Couldn't parse expected expression");
+                let expression = self
+                    .parse_expression_choice(false)
+                    .expect("Couldn't parse expected expression");
                 // dbg!(&expression);
                 self.parse_insert_value(expression)?;
             } else if Token::ClosedCurly == self.current_token() {
                 let mut thing = self.scope_stack.pop_front().unwrap();
                 thing.wrap_up_parsing(self);
-                self.scope_stack.peek_front_mut().unwrap().commands_mut().push(thing);
+                self.scope_stack
+                    .peek_front_mut()
+                    .unwrap()
+                    .commands_mut()
+                    .push(thing);
             }
             self.next();
         }
@@ -86,7 +111,7 @@ impl Parser {
 
     fn parse_if_statement(&mut self) -> ParsingResult<()> {
         if self.current_token() != Token::If {
-            return Err(Box::new(MissingToken))
+            return Err(Box::new(MissingToken));
         }
         let mut token = self.next();
         let mut expression_parser = ExpressionParser::with_scope_stack(&self.scope_stack);
@@ -96,7 +121,7 @@ impl Parser {
         let condition = expression_parser.build().unwrap();
         // dbg!(&condition);
         if self.current_token() != Token::OpenCurly {
-            return Err(Box::new(MissingToken))
+            return Err(Box::new(MissingToken));
         }
 
         let condition = IfCondition::new(condition);
@@ -128,7 +153,11 @@ impl Parser {
             self.next();
         }
 
-        Ok(expr_parser.build().unwrap())
+        let mut built_expression = expr_parser.build().unwrap();
+        if checked {
+            built_expression.attach_data_types(&self.scope_stack, &self.data_types);
+        }
+        Ok(built_expression)
     }
 
     fn parse_set_variable(&mut self, iden: &str) -> ParsingResult<()> {
@@ -147,12 +176,11 @@ impl Parser {
             //     panic!("Missing data type");
             // }
             let mut data_type_parser = DataTypeParser::new(&self.data_types);
-            while data_type_parser.consume(self.next()) {
-            }
+            while data_type_parser.consume(self.next()) {}
             let data_type = data_type_parser.build();
             let variable = Variable {
                 name: iden.to_string(),
-                data_type
+                data_type,
             };
             // dbg!("setting variable");
             self.scope_stack.set_variable(variable);
@@ -172,14 +200,21 @@ impl Parser {
             // dbg!("setting variable");
             self.scope_stack.set_variable(variable);
         }
-        let data_type = self.scope_stack.get_variable(iden).expect("Missing variable").data_type.clone();
+        let data_type = self
+            .scope_stack
+            .get_variable(iden)
+            .expect("Missing variable")
+            .data_type
+            .clone();
         let stmt = SetVariable::new(iden.to_string(), data_type, expr);
         self.scope_stack.commands_mut().push(Box::new(stmt));
         Ok(())
     }
 
     fn parse_insert_value(&mut self, location: Expression) -> ParsingResult<()> {
-        if self.current_token() != Token::Equal {return Err(Box::new(MissingToken))}
+        if self.current_token() != Token::Equal {
+            return Err(Box::new(MissingToken));
+        }
         self.next();
 
         let expr = self.parse_expression()?;
@@ -195,7 +230,10 @@ impl Parser {
 
         // let data_type = data_type_parser.parse_string(thing);
         // data_type
-        expr.expression_type(&self.scope_stack, &self.data_types).unwrap()
+        let borrowed: &ExpressionEnum = expr.borrow();
+        borrowed
+            .expression_type(&self.scope_stack, &self.data_types)
+            .unwrap()
     }
 
     fn parse_function(&mut self) -> ParsingResult<()> {
@@ -254,10 +292,17 @@ impl Parser {
 
         let mut function = Function::new(return_type.clone());
         for (name, dt) in &params {
-            function.variables.insert(name.clone(), Variable { name: name.clone(), data_type: dt.clone() });
+            function.variables.insert(
+                name.clone(),
+                Variable {
+                    name: name.clone(),
+                    data_type: dt.clone(),
+                },
+            );
         }
         function.params = params;
-        self.scope_stack.add_function(&func_name, return_type.clone());
+        self.scope_stack
+            .add_function(&func_name, return_type.clone());
         function.name = func_name.to_string();
         self.scope_stack.push_front(Box::new(function));
 

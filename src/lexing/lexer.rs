@@ -6,9 +6,7 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn new(raw_text: String) -> Self {
-        Self {
-            raw_text
-        }
+        Self { raw_text }
     }
 
     fn empty(&self) -> bool {
@@ -47,26 +45,26 @@ impl Lexer {
             '=' if self.peek_next() == Some('=') => {
                 self.pop();
                 Some(Token::DoubleEqual)
-            },
+            }
             '<' if self.peek_next() != Some('=') => Some(Token::Lesser),
             '<' if self.peek_next() == Some('=') => {
                 self.pop();
                 Some(Token::LesserEqual)
-            },
+            }
             '>' if self.peek_next() != Some('=') => Some(Token::Greater),
             '>' if self.peek_next() == Some('=') => {
                 self.pop();
                 Some(Token::GreaterEqual)
-            },
+            }
             '!' if self.peek_next() == Some('=') => {
                 self.pop();
                 Some(Token::NotEqual)
-            },
+            }
             ':' => Some(Token::Colon),
             '[' => Some(Token::OpenSquare),
             ']' => Some(Token::CloseSquare),
             ',' => Some(Token::Comma),
-            _ => None
+            _ => None,
         };
 
         if current == '"' {
@@ -88,11 +86,11 @@ impl Lexer {
                         'n' => {
                             string.push('\n');
                             self.pop();
-                        },
+                        }
                         _ => panic!("Invalid Escaped Character"),
                     };
                     escaped = false;
-                } 
+                }
             }
             self.pop();
             return Token::String(string);
@@ -116,11 +114,11 @@ impl Lexer {
                         'n' => {
                             string.push('\n');
                             self.pop();
-                        },
+                        }
                         _ => panic!("Invalid Escaped Character"),
                     };
                     escaped = false;
-                } 
+                }
             }
             assert!(string.len() == 1);
             self.pop();
@@ -159,7 +157,7 @@ impl Lexer {
                 "as" => Token::As,
                 "else" => Token::Else,
                 "return" => Token::Return,
-                _ => Token::Identifier(current_string)
+                _ => Token::Identifier(current_string),
             };
         }
         return Token::EOL;
@@ -188,8 +186,19 @@ mod test {
         let raw = "def hello() {\n2 + 3\n}".to_string();
 
         let mut lexer = Lexer::new(raw);
-        let expected_tokens = &[Token::Def, Token::Identifier("hello".into()),
-            OpenParenth, CloseParenth, OpenCurly, EOL, Integer(2), Plus, Integer(3), EOL, ClosedCurly];
+        let expected_tokens = &[
+            Token::Def,
+            Token::Identifier("hello".into()),
+            OpenParenth,
+            CloseParenth,
+            OpenCurly,
+            EOL,
+            Integer(2),
+            Plus,
+            Integer(3),
+            EOL,
+            ClosedCurly,
+        ];
 
         for expected in expected_tokens {
             assert_eq!(lexer.next(), *expected);

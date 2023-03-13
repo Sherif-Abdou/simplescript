@@ -1,5 +1,5 @@
 def main(): char {
     c = "hi"
     c[0] = char(90)
-    return char(3)
+    return char(5)
 }

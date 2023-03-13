@@ -1,6 +1,6 @@
 #![feature(trait_upcasting)]
 
-use std::{fs::{File}, io::Read};
+use std::{fs::File, io::Read};
 
 use runner::run;
 
@@ -8,7 +8,6 @@ mod ast;
 mod lexing;
 mod parsing;
 mod runner;
-
 
 fn load_file(relative_path: &str) -> String {
     let mut f = File::open(relative_path).expect("Missing file");

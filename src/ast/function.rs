@@ -1,9 +1,11 @@
-use std::{collections::{HashMap, HashSet}, cell::RefCell};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 use inkwell::types::{AnyType, BasicMetadataTypeEnum};
 
-use super::{Statement, Variable, Scope, DataType};
-
+use super::{DataType, Scope, Statement, Variable};
 
 pub struct Function {
     pub params: Vec<(String, DataType)>,
@@ -22,7 +24,7 @@ impl Function {
             commands: vec![],
             variables: Default::default(),
             functions: Default::default(),
-            name: "".to_string  (),
+            name: "".to_string(),
         }
     }
 }
@@ -59,14 +61,26 @@ impl Scope for Function {
     fn scope_type(&self) -> &'static str {
         "function"
     }
-
 }
 
 impl Statement for Function {
-    fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        let param_types: Vec<BasicMetadataTypeEnum> = self.params.iter().map(|(n, dt)| dt.produce_llvm_type(data.context).as_basic_type_enum().into()).collect();
+    fn visit<'a>(
+        &'a self,
+        data: &'a super::Compiler,
+    ) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+        let param_types: Vec<BasicMetadataTypeEnum> = self
+            .params
+            .iter()
+            .map(|(n, dt)| {
+                dt.produce_llvm_type(data.context)
+                    .as_basic_type_enum()
+                    .into()
+            })
+            .collect();
         let fn_type = match self.return_type {
-            Some(ref dt) => dt.produce_llvm_type(&data.context).fn_type(&param_types, false),
+            Some(ref dt) => dt
+                .produce_llvm_type(&data.context)
+                .fn_type(&param_types, false),
             None => data.context.void_type().fn_type(&param_types, false),
         };
         let fn_value = data.module.add_function(&self.name, fn_type, None);
@@ -81,12 +95,15 @@ impl Statement for Function {
         data.current_function_params.swap(&rfcell);
         let block = data.context.append_basic_block(fn_value, "entry");
         data.builder.position_at_end(block);
-        data.function_table.borrow_mut().insert(self.name.clone(), fn_value);
+        data.function_table
+            .borrow_mut()
+            .insert(self.name.clone(), fn_value);
         for command in &self.commands {
             command.visit(data);
         }
         for name in self.variables.keys() {
             data.variable_table.borrow_mut().remove(name);
+            data.variable_type.borrow_mut().remove(name);
         }
         return Some(Box::new(fn_value));
     }

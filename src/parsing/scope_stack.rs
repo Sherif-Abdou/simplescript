@@ -1,7 +1,6 @@
-use std::{collections::VecDeque};
+use std::collections::VecDeque;
 
-use crate::ast::{Scope, Statement, DataType};
-
+use crate::ast::{DataType, Scope, Statement};
 
 #[derive(Default)]
 pub struct ScopeStack {
@@ -27,7 +26,10 @@ impl ScopeStack {
 }
 
 impl Statement for ScopeStack {
-    fn visit<'a>(&self, data: &'a crate::ast::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+    fn visit<'a>(
+        &self,
+        data: &'a crate::ast::Compiler,
+    ) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
         None
     }
 }
@@ -69,7 +71,10 @@ impl Scope for ScopeStack {
     }
 
     fn add_function(&mut self, name: &str, return_type: Option<DataType>) {
-        self.scope_stack.front_mut().unwrap().add_function(name, return_type);
+        self.scope_stack
+            .front_mut()
+            .unwrap()
+            .add_function(name, return_type);
     }
 
     fn return_type_of(&self, name: &str) -> Option<DataType> {

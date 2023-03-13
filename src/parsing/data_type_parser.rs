@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt::format};
 
-use crate::{ast::{DataType, DataTypeEnum}, lexing::{Token, Lexer}};
+use crate::{
+    ast::{DataType, DataTypeEnum},
+    lexing::{Lexer, Token},
+};
 
 enum BuildType {
     Array,
@@ -18,7 +21,7 @@ impl<'a> DataTypeParser<'a> {
         Self {
             data_types,
             internal_type: None,
-            build_type: None
+            build_type: None,
         }
     }
 
@@ -36,27 +39,27 @@ impl<'a> DataTypeParser<'a> {
     pub fn consume(&mut self, token: Token) -> bool {
         // dbg!(&token);
         // if token == Token::EOF {
-            // dbg!(&self.internal_type);
+        // dbg!(&self.internal_type);
         // }
         match token {
             Token::OpenSquare => {
                 if self.build_type.is_none() {
                     self.build_type = Some(BuildType::Array);
                 }
-            },
+            }
             Token::Identifier(iden) => {
                 // dbg!(&iden);
                 self.internal_type = Some(self.data_types[&iden].clone());
                 if let Some(BuildType::Reference) = &self.build_type {
                     self.internal_type = Some(DataType {
                         symbol: format!("&{}", self.internal_type.as_ref().unwrap().symbol),
-                        value: DataTypeEnum::Pointer(Box::new(self.internal_type.as_ref().unwrap().clone())),
+                        value: DataTypeEnum::Pointer(Box::new(
+                            self.internal_type.as_ref().unwrap().clone(),
+                        )),
                     });
                 }
-            },
-            Token::Colon => {
-
-            },
+            }
+            Token::Colon => {}
             Token::Integer(size) => {
                 let internal = (self.internal_type.as_ref().unwrap()).clone();
                 let new_data_type = DataType {
@@ -65,10 +68,8 @@ impl<'a> DataTypeParser<'a> {
                 };
 
                 self.internal_type = Some(new_data_type);
-            },
-            Token::Ampersand => {
-                self.build_type = Some(BuildType::Reference)  
-            },
+            }
+            Token::Ampersand => self.build_type = Some(BuildType::Reference),
             Token::CloseSquare => return true,
             Token::EOL => return false,
             Token::EOF => return false,

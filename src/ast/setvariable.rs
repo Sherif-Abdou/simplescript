@@ -1,6 +1,7 @@
+use crate::ast::Expression;
 use inkwell::values::{AnyValueEnum, BasicValueEnum};
 
-use super::{Expression, Statement, DataType};
+use super::{DataType, ExpressionEnum, Statement};
 
 pub struct SetVariable {
     name: String,
@@ -19,7 +20,10 @@ impl SetVariable {
 }
 
 impl Statement for SetVariable {
-    fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+    fn visit<'a>(
+        &'a self,
+        data: &'a super::Compiler,
+    ) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
         let data_type = self.data_type.produce_llvm_type(data.context);
         if let Some(param) = data.current_function_params.borrow().get(&self.name) {
             let allocation = param.into_pointer_value();
@@ -33,8 +37,15 @@ impl Statement for SetVariable {
             return Some(Box::new(res));
         }
         if !data.variable_table.borrow().contains_key(&self.name) {
-            let allocation = data.builder.build_alloca(data_type.as_basic_type_enum(), &self.name);
-            data.variable_table.borrow_mut().insert(self.name.clone(), allocation);
+            let allocation = data
+                .builder
+                .build_alloca(data_type.as_basic_type_enum(), &self.name);
+            data.variable_table
+                .borrow_mut()
+                .insert(self.name.clone(), allocation);
+            data.variable_type
+                .borrow_mut()
+                .insert(self.name.clone(), self.data_type.clone());
         }
         let Some(value) = self.value.visit(data) else {
             return None;
@@ -49,7 +60,7 @@ impl Statement for SetVariable {
             AnyValueEnum::PointerValue(a) => data.builder.build_store(*allocation, a),
             AnyValueEnum::StructValue(a) => data.builder.build_store(*allocation, a),
             AnyValueEnum::VectorValue(a) => data.builder.build_store(*allocation, a),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
 
         Some(Box::new(res))

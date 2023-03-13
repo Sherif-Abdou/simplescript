@@ -1,7 +1,7 @@
-use std::{collections::HashSet};
-use std::collections::HashMap;
-use inkwell::values::AnyValue;
 use crate::ast::{Compiler, Scope, Statement, Variable};
+use inkwell::values::AnyValue;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 use super::DataType;
 

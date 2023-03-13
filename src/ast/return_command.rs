@@ -1,7 +1,7 @@
+use crate::ast::Expression;
 use inkwell::values::BasicValue;
 
-use super::{Expression, Statement};
-
+use super::{ExpressionEnum, Statement};
 
 pub struct ReturnCommand {
     value: Expression,
@@ -9,14 +9,15 @@ pub struct ReturnCommand {
 
 impl ReturnCommand {
     pub fn new(value: Expression) -> Self {
-        Self {
-            value
-        }
+        Self { value }
     }
 }
 
 impl Statement for ReturnCommand {
-    fn visit<'a>(&'a self, data: &'a super::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
+    fn visit<'a>(
+        &'a self,
+        data: &'a super::Compiler,
+    ) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
         // dbg!(&self.value);
         let raw_visited = self.value.visit(data);
         let visited = raw_visited.unwrap().as_any_value_enum();
@@ -27,7 +28,7 @@ impl Statement for ReturnCommand {
             inkwell::values::AnyValueEnum::PointerValue(ref a) => a,
             inkwell::values::AnyValueEnum::StructValue(ref a) => a,
             inkwell::values::AnyValueEnum::VectorValue(ref a) => a,
-            _ => panic!()
+            _ => panic!(),
         });
 
         data.builder.build_return(Some(basic_value));

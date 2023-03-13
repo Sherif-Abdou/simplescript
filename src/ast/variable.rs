@@ -1,6 +1,5 @@
 use super::datatype::DataType;
 
-
 #[derive(Hash)]
 pub struct Variable {
     pub name: String,
