@@ -5,6 +5,7 @@ mod function_call_parser;
 mod parser;
 mod scope_stack;
 mod sub_expression_parser;
+mod new_expression_parser;
 
 pub use data_type_parser::*;
 pub use parser::*;

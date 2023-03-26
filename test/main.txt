@@ -1,7 +1,8 @@
 def main(): char {
     c = "hi"
+    arr = [1,2,3]
     c[0] = char(90)
-    if 1 == 1 {
+    if arr[0] == 1 {
         return 1
     }
     return char(5)
