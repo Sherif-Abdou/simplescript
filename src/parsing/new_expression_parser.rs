@@ -63,7 +63,7 @@ impl<'a> Index<usize> for SlotList<'a> {
     type Output = Slot;
 
     fn index(&self, index: usize) -> &Self::Output {
-        if index >= self.end.get() - self.start.get() {
+        if index as isize >= (self.end.get() as isize) - (self.start.get() as isize) {
             return &Slot::None;
         }
         self.internal_slots.get(index + self.start.get()).unwrap_or(&Slot::None)
@@ -80,7 +80,7 @@ struct ExpressionParser<'a> {
 }
 
 impl<'a> ExpressionParser<'a> {
-    fn set_scope(mut self, scope: Option<&'a dyn Scope>) -> Self {
+    fn with_scope(mut self, scope: Option<&'a dyn Scope>) -> Self {
         self.scope = scope;
         self
     }
@@ -182,7 +182,7 @@ impl<'a> ExpressionParser<'a> {
         }
         let middle = match &slots[0] {
             Slot::Expression(expr) => Some(expr.clone()),
-            Slot::Token(Token::Identifier(iden)) => todo!(),
+            Slot::Token(Token::Identifier(iden)) => self.parse_identifier(slots),
             _ => return None,
         };
 
@@ -222,7 +222,7 @@ impl<'a> ExpressionParser<'a> {
 
     /// Slot list should not include brackets
     fn parse_comma_list(&self, slots: &SlotList) -> Option<Vec<ExpressionEnum>> {
-        let comma_position = slots.iter().position(|v| *v == Slot::Token(Token::Comma));
+        let comma_position = Self::look_for(Slot::Token(Token::Comma), slots);
         if let Some(position) = comma_position {
             let first_item_slots = slots.clone();
             first_item_slots.set_end_to(position);
@@ -294,9 +294,17 @@ impl<'a> ExpressionParser<'a> {
         slots: &SlotList,
     ) -> Option<ExpressionEnum> {
         // Matches a function call
-        match (&slots[0], &slots[1], &slots[2]) {
-            (Slot::Token(Token::OpenSquare), Slot::Expression(inside), Slot::Token(Token::CloseParenth)) => {
-                slots.shift_by(2);
+        // dbg!(&slots[0]);
+        match &slots[0] {
+            Slot::Token(Token::OpenSquare) => {
+                let close_position = self.find_close_square(slots);
+                if close_position == -1 {return None;}
+                let subsection = slots.clone();
+                subsection.set_end_to(close_position as usize);
+                subsection.shift_by(1);
+                let inside = self.parse(&subsection)?;
+                slots.shift_by(close_position as usize);
+
                 self.check_for_postfix(ExpressionEnum::VariableExtract(
                     Box::new(old_expression.into()),
                     Box::new(inside.clone().into()),
@@ -313,6 +321,8 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
         match &token {
             | Token::EOF
             | Token::EOL
+            | Token::OpenParenth
+            | Token::OpenSquare
             | Token::OpenCurly => self.consuming_token_stack.push_front(token.clone()),
 
             Token::ClosedCurly
@@ -324,7 +334,10 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
                     self.consuming_token_stack.pop_front();
                 }
             }
-            Token::Comma if self.consuming_token_stack.is_empty() => return Ok(false),
+            Token::Comma if self.consuming_token_stack.is_empty() => {
+                dbg!("Returning");
+                return Ok(false)
+            },
             _ => return Ok(true)
         }
 
@@ -340,16 +353,16 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
 
 impl<'a> ExpressionParser<'a> {
     fn consume_token(&mut self, token: Token) {
-        if let Some(ref mut subparser) = self.subparser {
-            let can_continue = subparser.consume(token.clone());
-            if let Ok(false) = can_continue {
-                let built = subparser.build();
-                self.slots
-                    .push(built.map(Slot::Expression).unwrap_or(Slot::None));
-                self.slots.push(Slot::Token(token.clone()));
-                self.subparser = None;
-            }
-        }
+        // if let Some(ref mut subparser) = self.subparser {
+        //     let can_continue = subparser.consume(token.clone());
+        //     if let Ok(false) = can_continue {
+        //         let built = subparser.build();
+        //         self.slots
+        //             .push(built.map(Slot::Expression).unwrap_or(Slot::None));
+        //         self.slots.push(Slot::Token(token.clone()));
+        //         self.subparser = None;
+        //     }
+        // }
 
         match token {
             Token::String(str) => self
@@ -366,11 +379,10 @@ impl<'a> ExpressionParser<'a> {
                 .push(Slot::Expression(ExpressionEnum::FloatLiteral(float))),
             Token::OpenSquare | Token::OpenParenth => {
                 self.slots.push(Slot::Token(token));
-                self.subparser = Some(Box::new(ExpressionParser::default().set_scope(self.scope)))
+                // self.subparser = Some(Box::new(ExpressionParser::default().with_scope(self.scope)))
             }
             // Weird case with comma, need to work with that
-            Token::Comma
-            | Token::EOF
+            Token::EOF
             | Token::EOL
             | Token::ClosedCurly
             // | Token::CloseSquare
@@ -383,9 +395,26 @@ impl<'a> ExpressionParser<'a> {
 
 #[cfg(test)]
 mod test {
+    use crate::ast::{RootScope, Variable, DataType};
     use crate::lexing::Token;
     use crate::parsing::new_expression_parser::ExpressionParser;
     use crate::parsing::sub_expression_parser::SubExpressionParser;
+
+    fn create_test_scope() -> RootScope {
+        let mut scope = RootScope::default();
+        scope.variables.insert(
+            "x".to_string(),
+            Variable {
+                name: "x".to_string(),
+                data_type: DataType {
+                    symbol: "i64".to_string(),
+                    value: crate::ast::DataTypeEnum::Primitive
+                }
+            }
+        );
+
+        scope
+    }
 
     #[test]
     fn test_basic_binary() {
@@ -401,12 +430,27 @@ mod test {
 
     #[test]
     fn test_array() {
-        let tokens = vec![Token::OpenSquare, Token::Integer(3), Token::Comma, Token::Float(2.7), Token::CloseSquare];
+        let tokens = vec![Token::OpenSquare, Token::Integer(3), Token::Comma, Token::Float(2.7), Token::Comma, Token::Integer(4), Token::CloseSquare];
         print_parsed(tokens);
     }
 
+    #[test]
+    fn test_variable_read() {
+        let tokens = vec![Token::Identifier("x".to_string())];
+        print_parsed(tokens);
+    }
+
+    #[test]
+    fn test_variable_extract() {
+        let tokens = vec![Token::Identifier("x".to_string()), Token::OpenSquare, Token::Integer(3), Token::CloseSquare];
+        print_parsed(tokens);
+    }
+
+
+
     fn print_parsed(tokens: Vec<Token>) {
-        let mut parser = ExpressionParser::default();
+        let scope = create_test_scope();
+        let mut parser = ExpressionParser::default().with_scope(Some(&scope));
 
         for token in tokens {
             parser.consume(token).unwrap();

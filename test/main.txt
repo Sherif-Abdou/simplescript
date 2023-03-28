@@ -1,9 +1,7 @@
-def main(): char {
-    c = "hi"
+def main(): i64 {
     arr = [1,2,3]
-    c[0] = char(90)
-    if arr[0] == 1 {
+    if 0 == 1 {
         return 1
     }
-    return char(5)
+    return 5
 }
