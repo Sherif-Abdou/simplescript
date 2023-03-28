@@ -1,7 +1,11 @@
-def main(): i64 {
+def double(x: i64): i64 {
+    return x * 2
+}
+
+def main(): f64 {
     arr = [1,2,3]
-    if 0 == 1 {
-        return 1
+    if arr[0] == 1 {
+        return f64(1000)
     }
-    return 5
+    return f64(2000)
 }

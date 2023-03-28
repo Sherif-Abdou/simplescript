@@ -1,9 +1,9 @@
-use crate::ast::{BinaryExpressionType, Expression, ExpressionEnum, Scope, UnaryExpressionType};
+use crate::ast::{BinaryExpressionType, Expression, ExpressionEnum, Scope, UnaryExpressionType, DataType};
 use crate::lexing::Token;
 use crate::parsing::sub_expression_parser::SubExpressionParser;
 use crate::parsing::ParsingResult;
 use std::cell::Cell;
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap};
 use std::iter::Skip;
 use std::ops::Index;
 use std::slice::Iter;
@@ -71,17 +71,23 @@ impl<'a> Index<usize> for SlotList<'a> {
 }
 
 #[derive(Default)]
-struct ExpressionParser<'a> {
+pub struct ExpressionParser<'a> {
     raw: Vec<Token>,
     slots: Vec<Slot>,
     consuming_token_stack: VecDeque<Token>,
     subparser: Option<Box<ExpressionParser<'a>>>,
-    scope: Option<&'a dyn Scope>
+    scope: Option<&'a dyn Scope>,
+    data_types: Option<&'a HashMap<String, DataType>>,
 }
 
 impl<'a> ExpressionParser<'a> {
-    fn with_scope(mut self, scope: Option<&'a dyn Scope>) -> Self {
+    pub fn with_scope(mut self, scope: Option<&'a dyn Scope>) -> Self {
         self.scope = scope;
+        self
+    }
+
+    pub fn with_data_types(mut self, data_types: Option<&'a HashMap<String, DataType>>) -> Self {
+        self.data_types = data_types;
         self
     }
 
@@ -196,7 +202,9 @@ impl<'a> ExpressionParser<'a> {
         };
 
         let Some(scope) = self.scope else {
-            return None;
+            return Some(
+                ExpressionEnum::VariableRead(identifier.to_string())
+            );
         };
 
         if scope.get_variable(identifier).is_some() {
@@ -204,15 +212,35 @@ impl<'a> ExpressionParser<'a> {
                 ExpressionEnum::VariableRead(identifier.to_string())
             );
         }
+
         if scope.contains_function(identifier) {
+            assert_eq!(slots[0], Slot::Token(Token::OpenParenth));
+            let close_position = self.find_close_parenth(slots);
+            let subsection = slots.clone();
+            subsection.set_end_to(close_position as usize);
+            subsection.shift_by(1);
+            let arguments = self.parse_comma_list(&subsection)?;
+            let expression = ExpressionEnum::FunctionCall(identifier.clone(),
+                arguments.iter().map(|v| (v.clone()).into()).collect());
+            slots.shift_by((close_position+1) as usize);
+            return Some(
+                expression
+            );
+        }
+
+        if self.data_types.map(|dt| dt.contains_key(identifier)).unwrap_or(false) {
+            let data_type = self.data_types.unwrap()[identifier].clone();
             assert_eq!(slots[0], Slot::Token(Token::OpenParenth));
             let close_position = self.find_close_parenth(slots);
             let subsection = slots.clone();
             slots.set_end_to(close_position as usize);
             slots.shift_by(1);
-            let arguments = self.parse_comma_list(&subsection)?;
-            let expression = ExpressionEnum::FunctionCall(identifier.clone(),
-                arguments.iter().map(|v| (v.clone()).into()).collect());
+            let to_convert: Expression = self.parse(&subsection)?.into();
+            slots.shift_by((close_position + 1) as usize);
+
+            let expression = ExpressionEnum::ExpressionCast(Box::new(to_convert), data_type.symbol);
+            dbg!(&expression);
+
             return Some(
                 expression
             );
@@ -317,16 +345,11 @@ impl<'a> ExpressionParser<'a> {
 
 impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
     fn consume(&mut self, token: Token) -> ParsingResult<bool> {
-        self.consume_token(token.clone());
         match &token {
-            | Token::EOF
-            | Token::EOL
             | Token::OpenParenth
-            | Token::OpenSquare
-            | Token::OpenCurly => self.consuming_token_stack.push_front(token.clone()),
+            | Token::OpenSquare => self.consuming_token_stack.push_front(token.clone()),
 
-            Token::ClosedCurly
-            | Token::CloseSquare
+            Token::CloseSquare
             | Token::CloseParenth => {
                 if self.consuming_token_stack.is_empty() {
                     return Ok(false)
@@ -334,12 +357,19 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
                     self.consuming_token_stack.pop_front();
                 }
             }
+
+            Token::EOF
+            | Token::EOL
+            | Token::Equal
+            | Token::OpenCurly
+            | Token::ClosedCurly => return Ok(false),
             Token::Comma if self.consuming_token_stack.is_empty() => {
                 dbg!("Returning");
                 return Ok(false)
             },
-            _ => return Ok(true)
+            _ => {}
         }
+        self.consume_token(token.clone());
 
         Ok(true)
     }

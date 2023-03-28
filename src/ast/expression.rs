@@ -222,7 +222,8 @@ impl Expression {
                     value.attach_data_types(scope, data_types);
                 }
             }
-            ExpressionEnum::VariableExtract(_, slot) => {
+            ExpressionEnum::VariableExtract(location, slot) => {
+                location.attach_data_types(scope, data_types);
                 slot.attach_data_types(scope, data_types);
             }
             ExpressionEnum::FunctionCall(_, params) => {
@@ -280,7 +281,6 @@ impl Expression {
             let dereference = data
                 .builder
                 .build_load(interior.expression_location(data).unwrap(), "__tmp__");
-            dbg!(&dereference);
             let as_ptr_type = dereference.into_pointer_value();
 
             return Some(as_ptr_type);

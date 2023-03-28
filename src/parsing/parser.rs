@@ -11,8 +11,9 @@ use std::borrow::Borrow;
 use std::{cell::RefCell, collections::HashMap, error::Error, fmt::Display};
 use crate::parsing::sub_expression_parser::SubExpressionParser;
 
+use super::new_expression_parser::ExpressionParser;
 use super::{
-    data_type_parser::DataTypeParser, expression_parser::ExpressionParser, scope_stack::ScopeStack,
+    data_type_parser::DataTypeParser, scope_stack::ScopeStack,
 };
 
 pub struct Parser {
@@ -116,6 +117,7 @@ impl Parser {
         let mut _token = self.next();
         let condition = self.parse_expression()?;
         if self.current_token() != Token::OpenCurly {
+            dbg!("panicking here", self.current_token());
             return Err(Box::new(MissingToken));
         }
 
@@ -140,9 +142,12 @@ impl Parser {
     }
 
     fn parse_expression_choice(&mut self, checked: bool) -> ParsingResult<Expression> {
-        let mut expr_parser = ExpressionParser::with_scope_stack(&self.scope_stack);
-        expr_parser.check_stack = checked;
-        expr_parser.data_types = Some(&self.data_types);
+        let mut expr_parser = ExpressionParser::default();
+        if checked {
+            expr_parser = expr_parser
+                .with_scope(Some(&self.scope_stack))
+                .with_data_types(Some(&self.data_types));
+        }
         while expr_parser.consume(self.current_token())? {
             self.next();
         }
