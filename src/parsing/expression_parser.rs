@@ -1,442 +1,538 @@
-use std::collections::{HashMap, VecDeque};
-
-
-use crate::{
-    ast::{DataType, ExpressionEnum, Scope, UnaryExpressionType},
-    lexing::Token,
-};
-use crate::ast::ExpressionEnum::VariableRead;
-
+use crate::ast::{BinaryExpressionType, Expression, ExpressionEnum, Scope, UnaryExpressionType, DataType};
+use crate::lexing::Token;
 use crate::parsing::sub_expression_parser::SubExpressionParser;
+use crate::parsing::ParsingResult;
+use std::cell::Cell;
+use std::collections::{VecDeque, HashMap};
+use std::iter::Skip;
+use std::ops::Index;
+use std::slice::Iter;
 
-use super::{
-    expression_cast_parser::ExpressionCastParser, function_call_parser::FunctionCallParser,
-    parser::ParsingResult, scope_stack::ScopeStack,
-};
+use super::{data_type_parser, DataTypeParser};
 
-enum WaitingUnaryTypes {
-    Reference,
-    Dereference,
-    Negation,
+#[derive(Clone, PartialEq, Debug)]
+enum Slot {
+    Expression(ExpressionEnum),
+    Token(Token),
+    None,
 }
 
+impl TryFrom<Slot> for Token {
+    type Error = &'static str;
+
+    fn try_from(value: Slot) -> Result<Self, Self::Error> {
+        match value {
+            Slot::Token(token) => Ok(token),
+            _ => Err("Slot is not a token"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct SlotList<'a> {
+    internal_slots: &'a Vec<Slot>,
+    start: Cell<usize>,
+    end: Cell<usize>,
+}
+
+impl<'a> SlotList<'a> {
+    fn new(slots: &'a Vec<Slot>) -> Self {
+        Self {
+            internal_slots: slots,
+            start: Cell::new(0),
+            end: Cell::new(slots.len()),
+        }
+    }
+
+    fn shift_by(&self, n: usize) {
+        self.start.set(self.start.get() + n)
+    }
+
+    fn pop(&self) -> &Slot {
+        let reference = &self[0];
+        self.shift_by(1);
+
+        reference
+    }
+
+    fn set_end_to(&self, new_end: usize) {
+        self.end.set(self.start.get() + new_end)
+    }
+
+    fn len(&self) -> usize {
+        self.end.get() - self.start.get()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn iter(&self) -> Iter<'_, Slot> {
+        self.internal_slots[self.start.get()..self.end.get()].iter()
+    }
+}
+
+impl<'a> Index<usize> for SlotList<'a> {
+    type Output = Slot;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        if index as isize >= (self.end.get() as isize) - (self.start.get() as isize) {
+            return &Slot::None;
+        }
+        self.internal_slots.get(index + self.start.get()).unwrap_or(&Slot::None)
+    }
+}
+
+#[derive(Default)]
 pub struct ExpressionParser<'a> {
-    // top_expression: Option<Expression>,
-    expression_stack: VecDeque<ExpressionEnum>,
-    scope_stack: Option<&'a ScopeStack>,
-    parser_stack: VecDeque<Box<dyn SubExpressionParser<'a> + 'a>>,
-    waiting_variable_name: Option<String>,
-    waiting_unary_operation: Option<WaitingUnaryTypes>,
-    waiting_data_type_parser: Option<Box<ExpressionCastParser<'a>>>,
-    pub data_types: Option<&'a HashMap<String, DataType>>,
-    was_last_binary: bool,
-    pub check_stack: bool,
+    raw: Vec<Token>,
+    slots: Vec<Slot>,
+    consuming_token_stack: VecDeque<Token>,
+    subparser: Option<Box<ExpressionParser<'a>>>,
+    scope: Option<&'a dyn Scope>,
+    data_types: Option<&'a HashMap<String, DataType>>,
 }
 
 impl<'a> ExpressionParser<'a> {
-    pub fn new() -> Self {
-        Self {
-            expression_stack: VecDeque::new(),
-            scope_stack: None,
-            parser_stack: VecDeque::new(),
-            waiting_variable_name: None,
-            waiting_unary_operation: None,
-            waiting_data_type_parser: None,
-            data_types: None,
-            was_last_binary: false,
-            check_stack: true,
-        }
+    pub fn with_scope(mut self, scope: Option<&'a dyn Scope>) -> Self {
+        self.scope = scope;
+        self
     }
 
-    pub fn with_scope_stack(stack: &'a ScopeStack) -> Self {
-        let mut new = Self::new();
-        new.scope_stack = Some(stack);
-        new
+    pub fn with_data_types(mut self, data_types: Option<&'a HashMap<String, DataType>>) -> Self {
+        self.data_types = data_types;
+        self
     }
 
-    fn check_variable(&mut self, token: &Token) {
-        if self.waiting_variable_name.is_some() {
-            match token {
-                Token::OpenSquare => {}
+    /// Looks for slot within the same layer
+    fn look_for(slot: Slot, slots: &SlotList) -> Option<usize> {
+        let mut layer : usize = 0;
+        for (i, current_slot) in slots.iter().enumerate() {
+            match current_slot {
+                Slot::Token(Token::OpenParenth)
+                | Slot::Token(Token::OpenSquare) => layer += 1,
+                Slot::Token(Token::CloseParenth)
+                | Slot::Token(Token::CloseSquare) => layer -= 1,
                 _ => {
-                    self.append_expr(ExpressionEnum::VariableRead(
-                        self.waiting_variable_name.as_ref().unwrap().clone(),
-                    ));
-                    self.waiting_variable_name = None;
+                    if *current_slot == slot && layer == 0 {
+                        return Some(i as usize);
+                    }
                 }
-            }
-        }
-    }
-
-
-
-    fn append_expr(&mut self, expression: ExpressionEnum) {
-        self.was_last_binary = expression.is_binary();
-        if self.waiting_unary_operation.is_some() {
-            let new_expression = match self.waiting_unary_operation.as_ref().unwrap() {
-                WaitingUnaryTypes::Reference => ExpressionEnum::Unary(
-                    Some(Box::new(expression.into())),
-                    UnaryExpressionType::Reference,
-                ),
-                WaitingUnaryTypes::Dereference => ExpressionEnum::Unary(
-                    Some(Box::new(expression.into())),
-                    UnaryExpressionType::Dereference,
-                ),
-                WaitingUnaryTypes::Negation => todo!(),
             };
-            self.waiting_unary_operation = None;
-            return self.append_expr(new_expression);
         }
+        None
+        // slots.iter().position(|s| slot.eq(s))
+    }
 
-        if self.expression_stack.is_empty() {
-            self.expression_stack.push_front(expression);
-            return;
-        }
+    /// Handle basic parentheses usage, pemdas type thing
+    fn handle_parentheses(&self, slots: &SlotList) -> Option<ExpressionEnum> {
+        let close_position = self.find_close_parenth(slots);
+        if close_position == -1 {return None;}
 
-        if self.front().is_binary() {
-            if !self.binary_left() {
-                self.binary_set_left(Some(expression));
-            } else if !self.binary_right() {
-                self.binary_set_right(Some(expression));
-            } else if expression.is_binary() {
-                let new_expr_precedence = expression.precedence();
-                let top_expr_precedence = self.front().precedence();
+        let subslots = slots.clone();
+        subslots.set_end_to(close_position as usize);
+        subslots.shift_by(1);
 
-                // Ex: 3+2*5
-                if new_expr_precedence >= top_expr_precedence {
-                    let tmp_right = self.front().binary_get_right().clone();
-                    self.binary_set_right(None);
-                    let new_expr = expression.binary_set_left(tmp_right.map(|v| (*v).into()));
-                    self.expression_stack.push_front(new_expr);
-                } else {
-                    // Ex: 2*5+3
-                    let new_outer_expr =
-                        expression.binary_set_left(self.expression_stack.pop_front());
-                    self.expression_stack.push_front(new_outer_expr);
-                }
+        slots.shift_by((close_position + 1) as usize);
+        self.parse(&subslots)
+    }
+
+    /// Finds the closing parenthesis in the same layer
+    fn find_close_parenth(&self, slots: &SlotList) -> i32 {
+        let mut layer = 0;
+        let mut close_position = -1;
+        for (position, slot) in slots.iter().enumerate() {
+            match *slot {
+                Slot::Token(Token::OpenParenth) => layer += 1,
+                Slot::Token(Token::CloseParenth) if layer > 1 => layer -= 1,
+                Slot::Token(Token::CloseParenth) if layer == 1 => close_position = position as i32,
+                _ => {}
             }
-        } else if expression.is_binary() {
-            let v = expression.binary_set_left(self.expression_stack.pop_front());
-            self.expression_stack.push_front(v);
+        }
+        close_position
+    }
+
+    /// Handles the array creation literal []
+    fn handle_square_brackets(&self, slots: &SlotList) -> Option<ExpressionEnum> {
+        let close_position = self.find_close_square(slots);
+        if close_position == -1 { return None;}
+
+        let subslots = slots.clone();
+        subslots.set_end_to(close_position as usize);
+        subslots.shift_by(1);
+
+        slots.shift_by((close_position + 1) as usize);
+        let things = self.parse_comma_list(&subslots)?;
+        Some(ExpressionEnum::Array(things.into_iter().map(|v| v.into()).collect()))
+    }
+
+    /// Finds the closing square bracket in the same layer
+    fn find_close_square(&self, slots: &SlotList) -> i32 {
+        let mut layer = 0;
+        let mut close_position = -1;
+        for (position, slot) in slots.iter().enumerate() {
+            match *slot {
+                Slot::Token(Token::OpenSquare) => layer += 1,
+                Slot::Token(Token::CloseSquare) if layer > 1 => layer -= 1,
+                Slot::Token(Token::CloseSquare) if layer == 1 => close_position = position as i32,
+                _ => {}
+            }
+        }
+        close_position
+    }
+
+    /// Check for any prefix operators and handle them(eg: reference, dereference)
+    fn check_for_prefix(&self, slots: &SlotList) -> Option<ExpressionEnum> {
+        // Look for unary operations
+        let unary_type = match slots[0] {
+            Slot::Token(Token::Ampersand) => Some(UnaryExpressionType::Reference),
+            Slot::Token(Token::Star) => Some(UnaryExpressionType::Dereference),
+            Slot::Token(Token::OpenParenth) => return self.handle_parentheses(slots),
+            Slot::Token(Token::OpenSquare) => return self.handle_square_brackets(slots),
+            _ => None,
+        };
+        if let Some(unary_type) = unary_type {
+            slots.shift_by(1);
+            // Parse following expression and wrap it with unary operation
+            return self.parse_local(slots)
+                .map(|v| ExpressionEnum::Unary(Some(Box::new(v.into())), unary_type));
+        }
+        None
+    }
+
+    /// Parses a local value, handling prefix operations and postfix operations
+    fn parse_local(&self, slots: &SlotList) -> Option<ExpressionEnum> {
+        let prefix_check = self.check_for_prefix(slots);
+        if prefix_check.is_some()  {
+            return prefix_check;
+        }
+        let middle = match &slots[0] {
+            Slot::Expression(expr) => Some(expr.clone()),
+            Slot::Token(Token::Identifier(_)) => self.parse_identifier(slots),
+            _ => return None,
+        };
+
+        middle
+            .and_then(|expression| self.check_for_postfix(expression, slots))
+    }
+
+    /// Parsing for identifiers since it's more complex
+    fn parse_identifier(&self, slots: &SlotList) -> Option<ExpressionEnum> {
+        let Slot::Token(Token::Identifier(identifier)) = slots.pop() else {
+            return None;
+        };
+
+        // If no scope attached, assume every identifier is some sort of variable
+        let Some(scope) = self.scope else {
+            return Some(
+                ExpressionEnum::VariableRead(identifier.to_string())
+            );
+        };
+
+        if scope.get_variable(identifier).is_some() {
+            return Some(
+                ExpressionEnum::VariableRead(identifier.to_string())
+            );
+        }
+
+        // Handle a function declaration
+        if scope.contains_function(identifier) {
+            assert_eq!(slots[0], Slot::Token(Token::OpenParenth));
+            let close_position = self.find_close_parenth(slots);
+            let subsection = slots.clone();
+            subsection.set_end_to(close_position as usize);
+            subsection.shift_by(1);
+            let arguments = self.parse_comma_list(&subsection)?;
+            let expression = ExpressionEnum::FunctionCall(identifier.clone(),
+                arguments.iter().map(|v| (v.clone()).into()).collect());
+            slots.shift_by((close_position+1) as usize);
+            return Some(
+                expression
+            );
+        }
+
+        // Handle a data type casting
+        // TODO: Use 'as' syntax instead for easier parsing
+        if self.data_types.map(|dt| dt.contains_key(identifier)).unwrap_or(false) {
+            let data_type = self.data_types.unwrap()[identifier].clone();
+            assert_eq!(slots[0], Slot::Token(Token::OpenParenth));
+            let close_position = self.find_close_parenth(slots);
+            let subsection = slots.clone();
+            slots.set_end_to(close_position as usize);
+            slots.shift_by(1);
+            let to_convert: Expression = self.parse(&subsection)?.into();
+            slots.shift_by((close_position + 1) as usize);
+
+            let expression = ExpressionEnum::ExpressionCast(Box::new(to_convert), data_type.symbol);
+
+            return Some(
+                expression
+            );
+        }
+        None
+    }
+
+    /// Slot list should not include brackets
+    fn parse_comma_list(&self, slots: &SlotList) -> Option<Vec<ExpressionEnum>> {
+        let comma_position = Self::look_for(Slot::Token(Token::Comma), slots);
+        if let Some(position) = comma_position {
+            let first_item_slots = slots.clone();
+            first_item_slots.set_end_to(position);
+            let remaining_slots = slots.clone();
+            remaining_slots.shift_by(position + 1);
+            let first_item = self.parse(&first_item_slots)?;
+            let mut remaining_items = self.parse_comma_list(&remaining_slots)?;
+            remaining_items.insert(0, first_item);
+            return Some(remaining_items);
+        }
+        self.parse(slots).map(|v| vec![v])
+    }
+
+    /// Overall parse function, handles infix operators
+    fn parse(&self, slots: &SlotList) -> Option<ExpressionEnum> {
+        // highest precidence operations last
+        let operations = vec![
+            Token::DoubleEqual,
+            Token::NotEqual,
+            Token::Greater,
+            Token::GreaterEqual,
+            Token::Lesser,
+            Token::LesserEqual,
+            Token::Plus,
+            Token::Minus,
+            Token::Star,
+            Token::Slash,
+        ];
+        for (i,operation) in operations.iter().enumerate() {
+            // Binary operations should not be first item in slot list
+            if i == 0 { continue; }
+            if let Some(index) = Self::look_for(Slot::Token(operation.clone()), slots) {
+                let left_list = slots.clone();
+                left_list.set_end_to(index);
+                let left = self.parse(&left_list);
+
+                let right_list = slots.clone();
+                right_list.shift_by(index+1);
+                let right = self.parse(&right_list);
+
+                return Some(
+                    ExpressionEnum::Binary(
+                        left.map(|v| v.into()).map(Box::new),
+                        right.map(|v| v.into()).map(Box::new),
+                            Self::binary_token_to_type(operation.clone()),
+                    )
+                )
+            }
+        }
+        self.parse_local(slots)
+    }
+
+    fn binary_token_to_type(token: Token) -> BinaryExpressionType {
+        use BinaryExpressionType::*;
+        match token {
+            Token::DoubleEqual => Equal ,
+            Token::NotEqual => NotEqual,
+            Token::Greater => Greater,
+            Token::GreaterEqual => GreaterEqual,
+            Token::Lesser => Less,
+            Token::LesserEqual => LessEqual,
+            Token::Plus => Addition,
+            Token::Minus => Subtraction,
+            Token::Star => Multiplication,
+            Token::Slash => Division,
+            _ => panic!()
         }
     }
 
-    fn front(&self) -> &ExpressionEnum {
-        &self.expression_stack[0]
-    }
+    fn check_for_postfix(
+        &self,
+        old_expression: ExpressionEnum,
+        slots: &SlotList,
+    ) -> Option<ExpressionEnum> {
+        // Matches a function call
+        // dbg!(&slots[0]);
+        match &slots[0] {
+            // Handle array extraction literal
+            Slot::Token(Token::OpenSquare) => {
+                let close_position = self.find_close_square(slots);
+                if close_position == -1 {return None;}
+                let subsection = slots.clone();
+                subsection.set_end_to(close_position as usize);
+                subsection.shift_by(1);
+                let inside = self.parse(&subsection)?;
+                slots.shift_by(close_position as usize);
 
-    fn binary_left(&self) -> bool {
-        if let ExpressionEnum::Binary(l, _, _) = self.front() {
-            return l.is_some();
+                self.check_for_postfix(ExpressionEnum::VariableExtract(
+                    Box::new(old_expression.into()),
+                    Box::new(inside.clone().into()),
+                ), slots)
+            },
+            // Handle type casting expression
+            Slot::Token(Token::As) => {
+                slots.pop();
+                let mut data_type_parser = DataTypeParser::new(&self.data_types.unwrap());
+                while data_type_parser.consume(slots[0].clone().try_into().unwrap()) {
+                    slots.pop();
+                }
+
+                let data_type = data_type_parser.build();
+
+                self.check_for_postfix(ExpressionEnum::ExpressionCast(
+                        Box::new(old_expression.into()),
+                        data_type.produce_string()
+                ), slots)
+            },
+            // No postfix, just return the expression
+            _ => Some(old_expression),
         }
-        false
-    }
-
-    fn binary_set_left(&mut self, expression: Option<ExpressionEnum>) {
-        let v = self
-            .expression_stack
-            .pop_front()
-            .unwrap()
-            .binary_set_left(expression);
-        self.expression_stack.push_front(v);
-    }
-
-    fn binary_set_right(&mut self, expression: Option<ExpressionEnum>) {
-        let v = self
-            .expression_stack
-            .pop_front()
-            .unwrap()
-            .binary_set_right(expression);
-        self.expression_stack.push_front(v);
-    }
-
-    fn binary_right(&self) -> bool {
-        if let ExpressionEnum::Binary(_, r, _) = self.front() {
-            return r.is_some();
-        }
-        false
     }
 }
 
 impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
     fn consume(&mut self, token: Token) -> ParsingResult<bool> {
-        if let Some(ref mut parser) = self.waiting_data_type_parser {
-            if !parser.consume(token)? {
-                let res = parser.build();
-                self.waiting_data_type_parser = None;
-                self.append_expr(res);
-            }
-            return Ok(true);
-        }
-        if !self.parser_stack.is_empty() {
-            let can_continue = self
-                .parser_stack
-                .front_mut()
-                .unwrap()
-                .consume(token.clone())?;
-            if can_continue {
-                return Ok(true);
-            }
-            let sub_expression = self.parser_stack.pop_front().unwrap().build();
+        match &token {
+            | Token::OpenParenth
+            | Token::OpenSquare => self.consuming_token_stack.push_front(token.clone()),
 
-            match token {
-                Token::CloseSquare => {
-                    if let Some(ExpressionEnum::Array(_)) = self.expression_stack.front() {
-                        let Some(ExpressionEnum::Array(mut arr)) = self.expression_stack.pop_front() else {
-                            panic!();
-                        };
-                        if let Some(..) = sub_expression {
-                            arr.push(sub_expression.unwrap().into());
-                        }
-                        self.expression_stack.push_front(ExpressionEnum::Array(arr));
-                        return Ok(false);
-                    } else if let Some(ref name) = self.waiting_variable_name {
-                        let new_value = ExpressionEnum::VariableExtract(
-                            Box::new(VariableRead(name.to_string()).into()),
-                            Box::new(sub_expression.unwrap().into()),
-                        );
-                        self.waiting_variable_name = None;
-                        self.append_expr(new_value);
-                        return Ok(true);
-                    }
-                }
-                Token::Comma => {
-                    if let ExpressionEnum::Array(mut arr) =
-                        self.expression_stack.pop_front().unwrap()
-                    {
-                        arr.push(sub_expression.unwrap().into());
-                        self.expression_stack.push_front(ExpressionEnum::Array(arr));
-                        self.parser_stack
-                            .push_front(Box::new(ExpressionParser::with_scope_stack(
-                                self.scope_stack.unwrap(),
-                            )));
-                    }
-                }
-                _ => {
-                    if let Some(new_expression) = sub_expression {
-                        self.append_expr(new_expression);
-                        self.was_last_binary = false;
-                    }
-                }
-            }
-            return Ok(true);
-        }
-        self.check_variable(&token);
-
-        // dbg!(&token);
-        let unary_mode = self.was_last_binary || self.expression_stack.is_empty();
-
-        match token {
-            Token::Integer(v) => {
-                let mini_expr = ExpressionEnum::IntegerLiteral(v);
-                self.append_expr(mini_expr);
-            }
-            Token::Float(v) => {
-                self.append_expr(ExpressionEnum::FloatLiteral(v));
-            }
-            Token::String(v) => {
-                self.append_expr(ExpressionEnum::StringLiteral(v));
-            }
-            Token::Char(v) => {
-                self.append_expr(ExpressionEnum::CharLiteral(v));
-            }
-            Token::Plus => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Addition,
-            )),
-            Token::Lesser => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Less,
-            )),
-            Token::LesserEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::LessEqual,
-            )),
-            Token::Greater => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Greater,
-            )),
-            Token::GreaterEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::GreaterEqual,
-            )),
-            Token::NotEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::NotEqual,
-            )),
-            Token::DoubleEqual => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Equal,
-            )),
-            Token::Minus if !unary_mode => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Subtraction,
-            )),
-            Token::Star if !unary_mode => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Multiplication,
-            )),
-            Token::Star if unary_mode => {
-                self.waiting_unary_operation = Some(WaitingUnaryTypes::Dereference)
-            }
-            Token::Ampersand if unary_mode => {
-                self.waiting_unary_operation = Some(WaitingUnaryTypes::Reference)
-            }
-            Token::Minus if unary_mode => {
-                self.waiting_unary_operation = Some(WaitingUnaryTypes::Negation)
-            }
-            Token::Slash => self.append_expr(ExpressionEnum::Binary(
-                None,
-                None,
-                crate::ast::BinaryExpressionType::Division,
-            )),
-            Token::OpenSquare => {
-                if self.expression_stack.is_empty() && self.waiting_variable_name.is_none() {
-                    let new_parser = ExpressionParser::with_scope_stack(self.scope_stack.unwrap());
-                    self.parser_stack.push_front(Box::new(new_parser));
-                    self.append_expr(ExpressionEnum::Array(Vec::new()));
+            Token::CloseSquare
+            | Token::CloseParenth => {
+                if self.consuming_token_stack.is_empty() {
+                    return Ok(false)
                 } else {
-                    let new_parser = ExpressionParser::with_scope_stack(self.scope_stack.unwrap());
-                    self.parser_stack.push_front(Box::new(new_parser));
+                    self.consuming_token_stack.pop_front();
                 }
             }
-            Token::Identifier(ref name) => {
-                if !self.check_stack {
-                    self.waiting_variable_name = Some(name.clone());
-                    return Ok(true);
-                }
-                if let Some(stack) = self.scope_stack {
-                    if stack.get_variable(name).is_some() {
-                        self.waiting_variable_name = Some(name.clone());
-                        //            self.append_expr(Expression::VariableRead(name.clone()));
-                        return Ok(true);
-                    } else if stack.contains_function(name) {
-                        let mut function_parser = Box::new(FunctionCallParser::new(stack));
-                        function_parser.consume(Token::Identifier(name.clone()))?;
-                        self.parser_stack.push_front(function_parser);
-                    } else {
-                        self.waiting_data_type_parser = Some(Box::new(ExpressionCastParser::new(
-                            self.scope_stack.unwrap(),
-                            self.data_types.unwrap(),
-                        )));
-                        self.waiting_data_type_parser
-                            .as_mut()
-                            .unwrap()
-                            .consume(token)?;
-                    }
-                } else {
-                }
-            }
-            Token::OpenParenth => {
-                self.parser_stack.push_front(
-                    self.scope_stack
-                        .map(ExpressionParser::with_scope_stack)
-                        .map(Box::new)
-                        .unwrap_or_else(|| Box::new(ExpressionParser::new())),
-                );
-            }
-            Token::EOL => return Ok(false),
-            Token::Comma => return Ok(false),
-            Token::Colon => return Ok(false),
-            Token::CloseParenth => return Ok(false),
-            Token::CloseSquare => return Ok(false),
-            Token::ClosedCurly => return Ok(false),
-            Token::OpenCurly => return Ok(false),
-            Token::Equal => return Ok(false),
-            _ => panic!("Didn't expect {:?}", token),
-        };
+
+            Token::EOF
+            | Token::EOL
+            | Token::Equal
+            | Token::OpenCurly
+            | Token::ClosedCurly => return Ok(false),
+            Token::Comma if self.consuming_token_stack.is_empty() => {
+                dbg!("Returning");
+                return Ok(false)
+            },
+            _ => {}
+        }
+        self.consume_token(token.clone());
 
         Ok(true)
     }
 
     fn build(&mut self) -> Option<ExpressionEnum> {
-        // dbg!(&self.expression_stack);
-        if let ExpressionEnum::Array(_) = self.expression_stack.front()? {
-            return Some(self.expression_stack.front()?.clone());
-        }
-        let mut current = self.expression_stack.pop_front();
-        while !self.expression_stack.is_empty() {
-            if self.front().is_binary() && !self.binary_right() {
-                self.binary_set_right(current);
-            }
-            current = self.expression_stack.pop_front();
-        }
+        let slotlist = SlotList::new(&self.slots);
 
-        Some(current.unwrap())
+        self.parse(&slotlist)
+    }
+}
+
+impl<'a> ExpressionParser<'a> {
+    fn consume_token(&mut self, token: Token) {
+        // if let Some(ref mut subparser) = self.subparser {
+        //     let can_continue = subparser.consume(token.clone());
+        //     if let Ok(false) = can_continue {
+        //         let built = subparser.build();
+        //         self.slots
+        //             .push(built.map(Slot::Expression).unwrap_or(Slot::None));
+        //         self.slots.push(Slot::Token(token.clone()));
+        //         self.subparser = None;
+        //     }
+        // }
+
+        match token {
+            Token::String(str) => self
+                .slots
+                .push(Slot::Expression(ExpressionEnum::StringLiteral(str))),
+            Token::Char(chr) => self
+                .slots
+                .push(Slot::Expression(ExpressionEnum::CharLiteral(chr))),
+            Token::Integer(integer) => self
+                .slots
+                .push(Slot::Expression(ExpressionEnum::IntegerLiteral(integer))),
+            Token::Float(float) => self
+                .slots
+                .push(Slot::Expression(ExpressionEnum::FloatLiteral(float))),
+            Token::OpenSquare | Token::OpenParenth => {
+                self.slots.push(Slot::Token(token));
+                // self.subparser = Some(Box::new(ExpressionParser::default().with_scope(self.scope)))
+            }
+            // Weird case with comma, need to work with that
+            Token::EOF
+            | Token::EOL
+            | Token::ClosedCurly
+            // | Token::CloseSquare
+            // | Token::CloseParenth
+            | Token::OpenCurly => {},
+            token => self.slots.push(Slot::Token(token)),
+        };
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::ast::{RootScope, Variable, DataType};
+    use crate::lexing::Token;
+    use crate::parsing::expression_parser::ExpressionParser;
+    use crate::parsing::sub_expression_parser::SubExpressionParser;
 
-    #[test]
-    fn can_parse_number() {
-        let number = Token::Integer(24);
+    fn create_test_scope() -> RootScope {
+        let mut scope = RootScope::default();
+        scope.variables.insert(
+            "x".to_string(),
+            Variable {
+                name: "x".to_string(),
+                data_type: DataType {
+                    symbol: "i64".to_string(),
+                    value: crate::ast::DataTypeEnum::Primitive
+                }
+            }
+        );
 
-        let mut expression_parser = ExpressionParser::new();
-
-        expression_parser.consume(number).expect("Some error");
-        let expr = expression_parser.build().unwrap();
-
+        scope
     }
 
     #[test]
-    fn can_parse_one_operation() {
-        let values = [Token::Integer(24), Token::Plus, Token::Integer(7)];
-
-        let mut expression_parser = ExpressionParser::new();
-        for value in values {
-            expression_parser.consume(value).expect("Some Error");
-        }
-
-        let expr = expression_parser.build().unwrap();
+    fn test_basic_binary() {
+        let tokens = vec![Token::Integer(2), Token::Plus, Token::Integer(3)];
+        print_parsed(tokens);
     }
 
     #[test]
-    fn can_parse_multiple_operations() {
-        let values = [
-            Token::Integer(24),
-            Token::Plus,
-            Token::Integer(7),
-            Token::Star,
-            Token::Integer(3),
-        ];
-
-        let mut expression_parser = ExpressionParser::new();
-        for value in values {
-            expression_parser.consume(value).expect("Some Error");
-        }
-
-        let expr = expression_parser.build();
-        println!("{:?}", expr);
+    fn test_advanced_binary() {
+        let tokens = vec![Token::Integer(2), Token::Plus, Token::Integer(3), Token::Slash, Token::Integer(78)];
+        print_parsed(tokens);
     }
 
     #[test]
-    fn can_parse_multiple_operations_2() {
-        let values = [
-            Token::Integer(24),
-            Token::Slash,
-            Token::Integer(7),
-            Token::Plus,
-            Token::Integer(3),
-        ];
+    fn test_array() {
+        let tokens = vec![Token::OpenSquare, Token::Integer(3), Token::Comma, Token::Float(2.7), Token::Comma, Token::Integer(4), Token::CloseSquare];
+        print_parsed(tokens);
+    }
 
-        let mut expression_parser = ExpressionParser::new();
-        for value in values {
-            expression_parser.consume(value).expect("Some Error");
+    #[test]
+    fn test_variable_read() {
+        let tokens = vec![Token::Identifier("x".to_string())];
+        print_parsed(tokens);
+    }
+
+    #[test]
+    fn test_variable_extract() {
+        let tokens = vec![Token::Identifier("x".to_string()), Token::OpenSquare, Token::Integer(3), Token::CloseSquare];
+        print_parsed(tokens);
+    }
+
+
+
+    fn print_parsed(tokens: Vec<Token>) {
+        let scope = create_test_scope();
+        let mut parser = ExpressionParser::default().with_scope(Some(&scope));
+
+        for token in tokens {
+            parser.consume(token).unwrap();
         }
 
-        let expr = expression_parser.build();
+        let expr = parser.build();
+
         println!("{:?}", expr);
     }
 }

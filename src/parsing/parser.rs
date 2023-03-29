@@ -11,7 +11,7 @@ use std::borrow::Borrow;
 use std::{cell::RefCell, collections::HashMap, error::Error, fmt::Display};
 use crate::parsing::sub_expression_parser::SubExpressionParser;
 
-use super::new_expression_parser::ExpressionParser;
+use super::expression_parser::ExpressionParser;
 use super::{
     data_type_parser::DataTypeParser, scope_stack::ScopeStack,
 };
