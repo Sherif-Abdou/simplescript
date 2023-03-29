@@ -8,11 +8,24 @@ use std::iter::Skip;
 use std::ops::Index;
 use std::slice::Iter;
 
+use super::{data_type_parser, DataTypeParser};
+
 #[derive(Clone, PartialEq, Debug)]
 enum Slot {
     Expression(ExpressionEnum),
     Token(Token),
     None,
+}
+
+impl TryFrom<Slot> for Token {
+    type Error = &'static str;
+
+    fn try_from(value: Slot) -> Result<Self, Self::Error> {
+        match value {
+            Slot::Token(token) => Ok(token),
+            _ => Err("Slot is not a token"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -180,6 +193,7 @@ impl<'a> ExpressionParser<'a> {
         };
         if let Some(unary_type) = unary_type {
             slots.shift_by(1);
+            // Parse following expression and wrap it with unary operation
             return self.parse_local(slots)
                 .map(|v| ExpressionEnum::Unary(Some(Box::new(v.into())), unary_type));
         }
@@ -194,7 +208,7 @@ impl<'a> ExpressionParser<'a> {
         }
         let middle = match &slots[0] {
             Slot::Expression(expr) => Some(expr.clone()),
-            Slot::Token(Token::Identifier(iden)) => self.parse_identifier(slots),
+            Slot::Token(Token::Identifier(_)) => self.parse_identifier(slots),
             _ => return None,
         };
 
@@ -208,6 +222,7 @@ impl<'a> ExpressionParser<'a> {
             return None;
         };
 
+        // If no scope attached, assume every identifier is some sort of variable
         let Some(scope) = self.scope else {
             return Some(
                 ExpressionEnum::VariableRead(identifier.to_string())
@@ -220,6 +235,7 @@ impl<'a> ExpressionParser<'a> {
             );
         }
 
+        // Handle a function declaration
         if scope.contains_function(identifier) {
             assert_eq!(slots[0], Slot::Token(Token::OpenParenth));
             let close_position = self.find_close_parenth(slots);
@@ -235,6 +251,8 @@ impl<'a> ExpressionParser<'a> {
             );
         }
 
+        // Handle a data type casting
+        // TODO: Use 'as' syntax instead for easier parsing
         if self.data_types.map(|dt| dt.contains_key(identifier)).unwrap_or(false) {
             let data_type = self.data_types.unwrap()[identifier].clone();
             assert_eq!(slots[0], Slot::Token(Token::OpenParenth));
@@ -246,7 +264,6 @@ impl<'a> ExpressionParser<'a> {
             slots.shift_by((close_position + 1) as usize);
 
             let expression = ExpressionEnum::ExpressionCast(Box::new(to_convert), data_type.symbol);
-            dbg!(&expression);
 
             return Some(
                 expression
@@ -273,6 +290,7 @@ impl<'a> ExpressionParser<'a> {
 
     /// Overall parse function, handles infix operators
     fn parse(&self, slots: &SlotList) -> Option<ExpressionEnum> {
+        // highest precidence operations last
         let operations = vec![
             Token::DoubleEqual,
             Token::NotEqual,
@@ -285,7 +303,9 @@ impl<'a> ExpressionParser<'a> {
             Token::Star,
             Token::Slash,
         ];
-        for operation in &operations {
+        for (i,operation) in operations.iter().enumerate() {
+            // Binary operations should not be first item in slot list
+            if i == 0 { continue; }
             if let Some(index) = Self::look_for(Slot::Token(operation.clone()), slots) {
                 let left_list = slots.clone();
                 left_list.set_end_to(index);
@@ -345,7 +365,21 @@ impl<'a> ExpressionParser<'a> {
                     Box::new(old_expression.into()),
                     Box::new(inside.clone().into()),
                 ), slots)
-            }
+            },
+            Slot::Token(Token::As) => {
+                slots.pop();
+                let mut data_type_parser = DataTypeParser::new(&self.data_types.unwrap());
+                while data_type_parser.consume(slots[0].clone().try_into().unwrap()) {
+                    slots.pop();
+                }
+
+                let data_type = data_type_parser.build();
+
+                self.check_for_postfix(ExpressionEnum::ExpressionCast(
+                        Box::new(old_expression.into()),
+                        data_type.produce_string()
+                ), slots)
+            },
             _ => Some(old_expression),
         }
     }

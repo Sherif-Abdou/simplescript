@@ -5,7 +5,7 @@ use inkwell::{context::Context, execution_engine::JitFunction};
 
 use crate::{ast::Compiler, parsing::Parser};
 
-type MainFunc = unsafe extern "C" fn() -> u8;
+type MainFunc = unsafe extern "C" fn() -> i64;
 
 pub fn run(file: String) {
     let context = Context::create();

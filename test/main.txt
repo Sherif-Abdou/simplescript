@@ -4,8 +4,9 @@ def double(x: i64): i64 {
 
 def main(): f64 {
     arr = [1,2,3]
-    if arr[0] == 1 {
-        return f64(1000)
+    r = &arr[0]
+    if arr[0] == 12 {
+        return (1000 as f64) as i64
     }
-    return f64(2000)
+    return (2000 as f64) as i64
 }
