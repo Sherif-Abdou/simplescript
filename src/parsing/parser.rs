@@ -154,6 +154,7 @@ impl Parser {
 
         let mut built_expression: Expression = expr_parser.build().unwrap().into();
         if checked {
+            dbg!(&built_expression);
             built_expression.attach_data_types(&self.scope_stack, &self.data_types);
         }
         Ok(built_expression)

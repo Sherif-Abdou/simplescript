@@ -114,7 +114,7 @@ impl<'a> ExpressionParser<'a> {
                 Slot::Token(Token::CloseParenth)
                 | Slot::Token(Token::CloseSquare) => layer -= 1,
                 _ => {
-                    if *current_slot == slot {
+                    if *current_slot == slot && layer == 0 {
                         return Some(i as usize);
                     }
                 }
@@ -352,6 +352,7 @@ impl<'a> ExpressionParser<'a> {
         // Matches a function call
         // dbg!(&slots[0]);
         match &slots[0] {
+            // Handle array extraction literal
             Slot::Token(Token::OpenSquare) => {
                 let close_position = self.find_close_square(slots);
                 if close_position == -1 {return None;}
@@ -366,6 +367,7 @@ impl<'a> ExpressionParser<'a> {
                     Box::new(inside.clone().into()),
                 ), slots)
             },
+            // Handle type casting expression
             Slot::Token(Token::As) => {
                 slots.pop();
                 let mut data_type_parser = DataTypeParser::new(&self.data_types.unwrap());
@@ -380,6 +382,7 @@ impl<'a> ExpressionParser<'a> {
                         data_type.produce_string()
                 ), slots)
             },
+            // No postfix, just return the expression
             _ => Some(old_expression),
         }
     }

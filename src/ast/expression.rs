@@ -212,6 +212,7 @@ impl Expression {
                 r.attach_data_types(scope, data_types);
             }
             ExpressionEnum::Unary(Some(interior), _) => {
+                dbg!("Attaching reference data type i think");
                 interior.attach_data_types(scope, data_types);
             }
             ExpressionEnum::ExpressionCast(interior, _) => {
@@ -495,6 +496,7 @@ impl ExpressionEnum {
                 None
             }
             ExpressionEnum::Unary(Some(interior), dt) => {
+                dbg!(&interior);
                 let thing = match dt {
                     UnaryExpressionType::Reference => format!(
                         "&{}",
@@ -526,6 +528,7 @@ impl ExpressionEnum {
             }
             ExpressionEnum::VariableExtract(ref location, _) => {
                 let data_type = location.data_type.clone()?;
+                dbg!(&data_type.symbol);
                 // For arrays, ignoring structs right now
                 match data_type.value {
                     DataTypeEnum::Array(ref a, _) => {
