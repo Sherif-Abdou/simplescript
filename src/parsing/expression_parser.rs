@@ -124,6 +124,26 @@ impl<'a> ExpressionParser<'a> {
         // slots.iter().position(|s| slot.eq(s))
     }
 
+    /// Looks for slot within the same layer
+    fn look_for_with_min(slot: Slot, slots: &SlotList, start: usize) -> Option<usize> {
+        let mut layer : usize = 0;
+        for (i, current_slot) in slots.iter().enumerate() {
+            match current_slot {
+                Slot::Token(Token::OpenParenth)
+                | Slot::Token(Token::OpenSquare) => layer += 1,
+                Slot::Token(Token::CloseParenth)
+                | Slot::Token(Token::CloseSquare) => layer -= 1,
+                _ => {
+                    if *current_slot == slot && layer == 0 && i >= start {
+                        return Some(i as usize);
+                    }
+                }
+            };
+        }
+        None
+        // slots.iter().position(|s| slot.eq(s))
+    }
+
     /// Handle basic parentheses usage, pemdas type thing
     fn handle_parentheses(&self, slots: &SlotList) -> Option<ExpressionEnum> {
         let close_position = self.find_close_parenth(slots);
@@ -303,10 +323,9 @@ impl<'a> ExpressionParser<'a> {
             Token::Star,
             Token::Slash,
         ];
-        for (i,operation) in operations.iter().enumerate() {
+        for operation in operations.iter() {
             // Binary operations should not be first item in slot list
-            if i == 0 { continue; }
-            if let Some(index) = Self::look_for(Slot::Token(operation.clone()), slots) {
+            if let Some(index) = Self::look_for_with_min(Slot::Token(operation.clone()), slots, 1) {
                 let left_list = slots.clone();
                 left_list.set_end_to(index);
                 let left = self.parse(&left_list);
@@ -409,7 +428,6 @@ impl<'a> SubExpressionParser<'a> for ExpressionParser<'a> {
             | Token::OpenCurly
             | Token::ClosedCurly => return Ok(false),
             Token::Comma if self.consuming_token_stack.is_empty() => {
-                dbg!("Returning");
                 return Ok(false)
             },
             _ => {}
@@ -512,6 +530,12 @@ mod test {
     #[test]
     fn test_variable_read() {
         let tokens = vec![Token::Identifier("x".to_string())];
+        print_parsed(tokens);
+    }
+
+    #[test]
+    fn test_variable_deref() {
+        let tokens = vec![Token::Star, Token::Identifier("x".to_string())];
         print_parsed(tokens);
     }
 

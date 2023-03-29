@@ -203,16 +203,12 @@ impl From<Expression> for ExpressionEnum {
 
 impl Expression {
     pub fn attach_data_types(&mut self, scope: &dyn Scope, data_types: &HashMap<String, DataType>) {
-        let expression_type = self.expression_enum.expression_type(scope, data_types);
-        self.data_type = expression_type;
-
         match &mut self.expression_enum {
             ExpressionEnum::Binary(Some(l), Some(r), _) => {
                 l.attach_data_types(scope, data_types);
                 r.attach_data_types(scope, data_types);
             }
             ExpressionEnum::Unary(Some(interior), _) => {
-                dbg!("Attaching reference data type i think");
                 interior.attach_data_types(scope, data_types);
             }
             ExpressionEnum::ExpressionCast(interior, _) => {
@@ -234,6 +230,9 @@ impl Expression {
             }
             _ => {}
         };
+
+        let expression_type = self.expression_type(scope, data_types);
+        self.data_type = expression_type;
     }
 
     pub fn expression_location<'a>(&'a self, data: &'a Compiler) -> Option<PointerValue<'a>> {
@@ -269,7 +268,6 @@ impl Expression {
 
         if let ExpressionEnum::VariableRead(ref variable_name) = self.expression_enum {
             if let Some(p) = data.current_function_params.borrow().get(variable_name) {
-                dbg!("converting p hopefully", p.is_pointer_value());
                 return Some(p.into_pointer_value());
             }
             let ptr = data.variable_table.borrow()[variable_name];
@@ -364,9 +362,99 @@ impl Expression {
 
             return Box::new(value.as_any_value_enum());
         }
-        dbg!(&parsed_left, &parsed_right);
         unimplemented!()
     }
+
+    pub fn data_type(
+        &self,
+        scope: &dyn Scope,
+        _data_types: &HashMap<String, DataType>,
+    ) -> Option<String> {
+        return match &self.expression_enum {
+            ExpressionEnum::Binary(l, r, _) => {
+                if l.as_ref().unwrap().data_type == r.as_ref().unwrap().data_type {
+                    return l
+                        .as_ref()
+                        .or(r.as_ref())
+                        .unwrap()
+                        .data_type
+                        .as_ref()
+                        .map(|v| v.symbol.clone());
+                }
+                None
+            }
+            ExpressionEnum::Unary(Some(interior), dt) => {
+                let thing = match dt {
+                    UnaryExpressionType::Reference => format!(
+                        "&{}",
+                        interior
+                            .data_type
+                            .as_ref()
+                            .map(|v| v.symbol.clone())
+                            .unwrap()
+                    ),
+                    UnaryExpressionType::Dereference => {
+                        interior.data_type.as_ref().unwrap().symbol[1..].to_string()
+                    }
+                };
+                Some(thing)
+            }
+            ExpressionEnum::VariableRead(ref v) => {
+                Some(scope.get_variable(v).unwrap().data_type.symbol.clone())
+            }
+            ExpressionEnum::IntegerLiteral(_) => Some("i64".to_string()),
+            ExpressionEnum::FloatLiteral(_) => Some("f64".to_string()),
+            ExpressionEnum::StringLiteral(ref s) => Some(format!("[char:{}]", s.len())),
+            ExpressionEnum::CharLiteral(_) => Some("char".to_string()),
+            ExpressionEnum::Array(ref list) => {
+                Some(format!(
+                    "[{}:{}]",
+                    list[0].data_type.as_ref()?.symbol,
+                    list.len()
+                ))
+            }
+            ExpressionEnum::VariableExtract(ref location, _) => {
+                let data_type = location.data_type.clone()?;
+                // For arrays, ignoring structs right now
+                match data_type.value {
+                    DataTypeEnum::Array(ref a, _) => {
+                        Some(a.symbol.clone())
+                    },
+                    DataTypeEnum::Pointer(ref interior) => {
+                        Some(interior.symbol.clone())
+                    },
+                    _ => {
+                        None
+                    }
+                }
+            }
+            ExpressionEnum::FunctionCall(ref name, _) => {
+                let result = scope.return_type_of(name).unwrap().produce_string();
+                Some(result)
+            }
+            ExpressionEnum::ExpressionCast(_, res) => Some(res.clone()),
+            _ => None,
+        };
+    }
+
+    pub fn expression_type(
+        &self,
+        scope: &dyn Scope,
+        data_types: &HashMap<String, DataType>,
+    ) -> Option<DataType> {
+        let dt_opt = self.data_type(scope, data_types);
+        if let Some(dt) = dt_opt {
+            let mut data_type_parser = DataTypeParser::new(data_types);
+
+            let data_type = data_type_parser.parse_string(dt);
+            return Some(data_type);
+        }
+
+        if let ExpressionEnum::FunctionCall(_, _) = self.expression_enum {}
+        None
+    }
+
+
 
     fn visit_cast<'a>(&'a self, data: &'a Compiler) -> Option<Box<dyn AnyValue + 'a>> {
         let ExpressionEnum::ExpressionCast(interior, resultant) = &self.expression_enum else {
@@ -477,98 +565,7 @@ impl ExpressionEnum {
         }
     }
 
-    pub fn data_type(
-        &self,
-        scope: &dyn Scope,
-        _data_types: &HashMap<String, DataType>,
-    ) -> Option<String> {
-        return match self {
-            ExpressionEnum::Binary(l, r, _) => {
-                if l.as_ref().unwrap().data_type == r.as_ref().unwrap().data_type {
-                    return l
-                        .as_ref()
-                        .or(r.as_ref())
-                        .unwrap()
-                        .data_type
-                        .as_ref()
-                        .map(|v| v.symbol.clone());
-                }
-                None
-            }
-            ExpressionEnum::Unary(Some(interior), dt) => {
-                dbg!(&interior);
-                let thing = match dt {
-                    UnaryExpressionType::Reference => format!(
-                        "&{}",
-                        interior
-                            .data_type
-                            .as_ref()
-                            .map(|v| v.symbol.clone())
-                            .unwrap()
-                    ),
-                    UnaryExpressionType::Dereference => {
-                        interior.data_type.as_ref().unwrap().symbol[1..].to_string()
-                    }
-                };
-                Some(thing)
-            }
-            ExpressionEnum::VariableRead(v) => {
-                Some(scope.get_variable(v).unwrap().data_type.symbol.clone())
-            }
-            ExpressionEnum::IntegerLiteral(_) => Some("i64".to_string()),
-            ExpressionEnum::FloatLiteral(_) => Some("f64".to_string()),
-            ExpressionEnum::StringLiteral(ref s) => Some(format!("[char:{}]", s.len())),
-            ExpressionEnum::CharLiteral(_) => Some("char".to_string()),
-            ExpressionEnum::Array(ref list) => {
-                Some(format!(
-                    "[{}:{}]",
-                    list[0].data_type.as_ref()?.symbol,
-                    list.len()
-                ))
-            }
-            ExpressionEnum::VariableExtract(ref location, _) => {
-                let data_type = location.data_type.clone()?;
-                dbg!(&data_type.symbol);
-                // For arrays, ignoring structs right now
-                match data_type.value {
-                    DataTypeEnum::Array(ref a, _) => {
-                        Some(a.symbol.clone())
-                    },
-                    DataTypeEnum::Pointer(ref interior) => {
-                        Some(interior.symbol.clone())
-                    },
-                    _ => {
-                        None
-                    }
-                }
-            }
-            ExpressionEnum::FunctionCall(name, _) => {
-                let result = scope.return_type_of(name).unwrap().produce_string();
-                Some(result)
-            }
-            ExpressionEnum::ExpressionCast(_, res) => Some(res.clone()),
-            _ => None,
-        };
-    }
-
-    pub fn expression_type(
-        &self,
-        scope: &dyn Scope,
-        data_types: &HashMap<String, DataType>,
-    ) -> Option<DataType> {
-        let dt_opt = self.data_type(scope, data_types);
-        if let Some(dt) = dt_opt {
-            let mut data_type_parser = DataTypeParser::new(data_types);
-
-            let data_type = data_type_parser.parse_string(dt);
-            return Some(data_type);
-        }
-
-        if let ExpressionEnum::FunctionCall(_, _) = self {}
-        None
-    }
-
-    pub fn is_binary(&self) -> bool {
+        pub fn is_binary(&self) -> bool {
         if let ExpressionEnum::Binary(_, _, _) = self {
             return true;
         }

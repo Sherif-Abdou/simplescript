@@ -117,7 +117,6 @@ impl Parser {
         let mut _token = self.next();
         let condition = self.parse_expression()?;
         if self.current_token() != Token::OpenCurly {
-            dbg!("panicking here", self.current_token());
             return Err(Box::new(MissingToken));
         }
 
@@ -154,7 +153,6 @@ impl Parser {
 
         let mut built_expression: Expression = expr_parser.build().unwrap().into();
         if checked {
-            dbg!(&built_expression);
             built_expression.attach_data_types(&self.scope_stack, &self.data_types);
         }
         Ok(built_expression)
@@ -173,16 +171,15 @@ impl Parser {
             self.scope_stack.set_variable(variable);
         }
         if self.current_token() != Token::Equal {
-            dbg!("Missing equal");
-            dbg!(&self.current_token());
             return Err(Box::new(MissingToken));
         }
         self.next();
         let expr = self.parse_expression()?;
+        
         if self.scope_stack.get_variable(iden).is_none() {
             let variable = Variable {
                 name: iden.to_string(),
-                data_type: self.expression_type(&expr),
+                data_type: expr.expression_type(&self.scope_stack, &self.data_types).unwrap(),
             };
             self.scope_stack.set_variable(variable);
         }
@@ -210,12 +207,6 @@ impl Parser {
         Ok(())
     }
 
-    fn expression_type(&mut self, expr: &Expression) -> DataType {
-        let borrowed: &ExpressionEnum = expr.borrow();
-        borrowed
-            .expression_type(&self.scope_stack, &self.data_types)
-            .unwrap()
-    }
 
     fn parse_function(&mut self) -> ParsingResult<()> {
         if self.current_token() != Token::Def {
