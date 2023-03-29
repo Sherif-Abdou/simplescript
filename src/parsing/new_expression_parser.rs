@@ -111,6 +111,7 @@ impl<'a> ExpressionParser<'a> {
         // slots.iter().position(|s| slot.eq(s))
     }
 
+    /// Handle basic parentheses usage, pemdas type thing
     fn handle_parentheses(&self, slots: &SlotList) -> Option<ExpressionEnum> {
         let close_position = self.find_close_parenth(slots);
         if close_position == -1 {return None;}
@@ -123,6 +124,7 @@ impl<'a> ExpressionParser<'a> {
         self.parse(&subslots)
     }
 
+    /// Finds the closing parenthesis in the same layer
     fn find_close_parenth(&self, slots: &SlotList) -> i32 {
         let mut layer = 0;
         let mut close_position = -1;
@@ -137,6 +139,7 @@ impl<'a> ExpressionParser<'a> {
         close_position
     }
 
+    /// Handles the array creation literal []
     fn handle_square_brackets(&self, slots: &SlotList) -> Option<ExpressionEnum> {
         let close_position = self.find_close_square(slots);
         if close_position == -1 { return None;}
@@ -150,6 +153,7 @@ impl<'a> ExpressionParser<'a> {
         Some(ExpressionEnum::Array(things.into_iter().map(|v| v.into()).collect()))
     }
 
+    /// Finds the closing square bracket in the same layer
     fn find_close_square(&self, slots: &SlotList) -> i32 {
         let mut layer = 0;
         let mut close_position = -1;
@@ -164,6 +168,7 @@ impl<'a> ExpressionParser<'a> {
         close_position
     }
 
+    /// Check for any prefix operators and handle them(eg: reference, dereference)
     fn check_for_prefix(&self, slots: &SlotList) -> Option<ExpressionEnum> {
         // Look for unary operations
         let unary_type = match slots[0] {
@@ -181,6 +186,7 @@ impl<'a> ExpressionParser<'a> {
         None
     }
 
+    /// Parses a local value, handling prefix operations and postfix operations
     fn parse_local(&self, slots: &SlotList) -> Option<ExpressionEnum> {
         let prefix_check = self.check_for_prefix(slots);
         if prefix_check.is_some()  {
@@ -196,6 +202,7 @@ impl<'a> ExpressionParser<'a> {
             .and_then(|expression| self.check_for_postfix(expression, slots))
     }
 
+    /// Parsing for identifiers since it's more complex
     fn parse_identifier(&self, slots: &SlotList) -> Option<ExpressionEnum> {
         let Slot::Token(Token::Identifier(identifier)) = slots.pop() else {
             return None;
@@ -264,6 +271,7 @@ impl<'a> ExpressionParser<'a> {
         self.parse(slots).map(|v| vec![v])
     }
 
+    /// Overall parse function, handles infix operators
     fn parse(&self, slots: &SlotList) -> Option<ExpressionEnum> {
         let operations = vec![
             Token::DoubleEqual,
