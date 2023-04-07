@@ -1,4 +1,4 @@
-use crate::ast::DataType;
+use crate::ast::{DataType, datatype};
 use crate::parsing::DataTypeParser;
 use inkwell::{
     values::{
@@ -6,7 +6,7 @@ use inkwell::{
         FloatValue, IntValue, PointerValue, StructValue,
     }, FloatPredicate, IntPredicate,
 };
-use std::borrow::Borrow;
+use std::{borrow::Borrow, panic::Location};
 use std::collections::HashMap;
 
 use super::{statement::Statement, Compiler, DataTypeEnum, Scope};
@@ -156,6 +156,12 @@ impl Statement for Expression {
             return Some(Box::new(data.builder.build_load(location, "__tmp__")));
         }
 
+        if let ExpressionEnum::VariableNamedExtract(_, _) = &self.expression_enum {
+            let location = self.expression_location(data).unwrap();
+
+            return Some(Box::new(data.builder.build_load(location, "__tmp__")));
+        }
+
         if let ExpressionEnum::FunctionCall(name, args) = &self.expression_enum {
             let function = data.function_table.borrow()[name];
             let params: Vec<BasicValueEnum> = args
@@ -222,6 +228,9 @@ impl Expression {
             ExpressionEnum::VariableExtract(location, slot) => {
                 location.attach_data_types(scope, data_types);
                 slot.attach_data_types(scope, data_types);
+            },
+            ExpressionEnum::VariableNamedExtract(location, _) => {
+                location.attach_data_types(scope, data_types);
             }
             ExpressionEnum::FunctionCall(_, params) => {
                 for param in params {
@@ -263,6 +272,17 @@ impl Expression {
                 );
 
                 return Some(new_location);
+            }
+        }
+
+        if let ExpressionEnum::VariableNamedExtract(ref location, ref name) = self.expression_enum {
+            let dt = location.data_type.clone()?;
+            let location = location.expression_location(data)?;
+
+            if let DataTypeEnum::Struct(_, name_map) = &dt.value {
+                return Some(
+                    data.builder.build_struct_gep(location, name_map[name] as u32, "__tmp__").unwrap()
+                );
             }
         }
 
@@ -427,6 +447,15 @@ impl Expression {
                         None
                     }
                 }
+            },
+            ExpressionEnum::VariableNamedExtract(ref location, ref name) => {
+                let data_type = location.data_type.clone()?;
+                if let DataTypeEnum::Struct(ref slots, ref name_map) = data_type.value {
+                    let interior_type = slots[name_map[name] as usize].as_ref();
+
+                    return Some(interior_type.produce_string());
+                }
+                None
             }
             ExpressionEnum::FunctionCall(ref name, _) => {
                 let result = scope.return_type_of(name).unwrap().produce_string();
@@ -501,6 +530,7 @@ pub enum ExpressionEnum {
     Array(Vec<Expression>),
     VariableRead(String),
     VariableExtract(Box<Expression>, Box<Expression>),
+    VariableNamedExtract(Box<Expression>, String),
     IntegerLiteral(i64),
     FloatLiteral(f64),
     StringLiteral(String),

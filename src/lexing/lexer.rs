@@ -41,6 +41,7 @@ impl Lexer {
             '{' => Some(Token::OpenCurly),
             '}' => Some(Token::ClosedCurly),
             '&' => Some(Token::Ampersand),
+            '.' => Some(Token::Dot),
             '=' if self.peek_next() != Some('=') => Some(Token::Equal),
             '=' if self.peek_next() == Some('=') => {
                 self.pop();
@@ -156,6 +157,7 @@ impl Lexer {
                 "if" => Token::If,
                 "as" => Token::As,
                 "else" => Token::Else,
+                "struct" => Token::Struct,
                 "return" => Token::Return,
                 _ => Token::Identifier(current_string),
             };

@@ -103,6 +103,8 @@ impl Parser {
                     .unwrap()
                     .commands_mut()
                     .push(thing);
+            } else if Token::Struct == self.current_token() {
+                self.parse_struct_value()?;
             }
             self.next();
         }
@@ -207,6 +209,31 @@ impl Parser {
         Ok(())
     }
 
+    fn parse_struct_value(&mut self) -> ParsingResult<()> {
+        if self.current_token() != Token::Struct {
+            return Err(Box::new(MissingToken));
+        }
+        let Token::Identifier(struct_name) = self.next() else {
+            return Err(Box::new(MissingToken));
+        };
+        if self.next() != Token::OpenCurly {
+            return Err(Box::new(MissingToken));
+        }
+        let (_, listing) = self.parse_data_type_list()?;
+        let name_map: HashMap<String, u64> = listing.iter()
+            .enumerate()
+            .map(|(i, (name, _))| (name.to_string(), i as u64))
+            .collect();
+        let data_type_list: Vec<Box<DataType>> = listing.iter()
+            .map(|(_, dt)| Box::new(dt.clone()))
+            .collect();
+        let struct_data_type = DataType {
+            symbol: struct_name.clone(),
+            value: crate::ast::DataTypeEnum::Struct(data_type_list, name_map)
+        };
+        self.data_types.insert(struct_name, struct_data_type);
+        Ok(())
+    }
 
     fn parse_function(&mut self) -> ParsingResult<()> {
         if self.current_token() != Token::Def {
@@ -226,27 +253,7 @@ impl Parser {
         if Token::OpenParenth != self.next() {
             return Err(Box::new(MissingToken));
         };
-        let mut next = self.next();
-        let mut params = Vec::new();
-        while next != Token::CloseParenth {
-            let Token::Identifier(iden) = next.clone() else {
-                return Err(Box::new(MissingToken));
-            };
-            next = self.next();
-            let Token::Colon = next.clone() else {
-                return Err(Box::new(MissingToken));
-            };
-            next = self.next();
-            let mut dt_parser = DataTypeParser::new(&self.data_types);
-            while dt_parser.consume(next.clone()) {
-                next = self.next();
-            }
-            let dt = dt_parser.build();
-            params.push((iden, dt));
-            if next == Token::Comma {
-                next = self.next();
-            }
-        }
+        let (mut next, params) = self.parse_data_type_list()?;
 
         next = self.next();
         let mut return_type = None;
@@ -279,6 +286,31 @@ impl Parser {
         self.scope_stack.push_front(Box::new(function));
 
         Ok(())
+    }
+
+    fn parse_data_type_list(&mut self) -> ParsingResult<(Token, Vec<(String, DataType)>)> {
+        let mut next = self.next();
+        let mut params = Vec::new();
+        while next != Token::CloseParenth {
+            let Token::Identifier(iden) = next.clone() else {
+                return Err(Box::new(MissingToken));
+            };
+            next = self.next();
+            let Token::Colon = next.clone() else {
+                return Err(Box::new(MissingToken));
+            };
+            next = self.next();
+            let mut dt_parser = DataTypeParser::new(&self.data_types);
+            while dt_parser.consume(next.clone()) {
+                next = self.next();
+            }
+            let dt = dt_parser.build();
+            params.push((iden, dt));
+            if next == Token::Comma || next == Token::EOL {
+                next = self.next();
+            }
+        }
+        Ok((next, params))
     }
 
     fn next(&self) -> Token {
