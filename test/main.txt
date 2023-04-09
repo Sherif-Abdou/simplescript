@@ -1,10 +1,12 @@
+extern def log(x: f64): f64
+extern def putchar(x: char): i64
+extern def gets(buffer: &char): &char
+extern def malloc(size: i64): &char
+extern def free(ptr: &char)
+
 struct Point {
     x: i64,
     y: i64
-}
-
-def double(x: i64): i64 {
-    return x * 2
 }
 
 def triple(x: i64): Point {
@@ -14,13 +16,12 @@ def triple(x: i64): Point {
 }
 
 def main(): i64 {
-    arr = [1,2,3]
-    d = Point()
-    arr[0] = 3
-    r = &(arr[0])
-    *r = 13
-    if arr[0] == 12 {
-        return (1000 as f64) as i64
-    }
-    return triple(3).x
+    j = [1, 2, 3]
+    v = malloc(10)
+    gets(v)
+    putchar(v[0])
+    putchar(v[1])
+    putchar(v[2])
+    putchar(v[3])
+    return 0
 }

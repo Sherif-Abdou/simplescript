@@ -1,13 +1,12 @@
 use crate::ast::{DataType, datatype};
 use crate::parsing::DataTypeParser;
-use inkwell::{
-    values::{
-        AnyValue, AnyValueEnum, ArrayValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum,
-        FloatValue, IntValue, PointerValue, StructValue,
-    }, FloatPredicate, IntPredicate,
-};
+use inkwell::{values::{
+    AnyValue, AnyValueEnum, ArrayValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum,
+    FloatValue, IntValue, PointerValue, StructValue,
+}, FloatPredicate, IntPredicate, AddressSpace};
 use std::{borrow::Borrow, panic::Location};
 use std::collections::HashMap;
+use inkwell::types::BasicType;
 
 use super::{statement::Statement, Compiler, DataTypeEnum, Scope};
 
@@ -78,11 +77,12 @@ impl Statement for Expression {
         }
 
         if let ExpressionEnum::StringLiteral(ref str) = &self.expression_enum {
-            let bytes: Vec<_> = str
+            let mut bytes: Vec<_> = str
                 .as_bytes()
                 .iter()
                 .map(|v| data.context.i8_type().const_int(*v as u64, false))
                 .collect();
+            // bytes.push(data.context.i8_type().const_zero());
             let array = data.context.i8_type().const_array(&bytes);
 
             return Some(Box::new(array));
@@ -164,8 +164,10 @@ impl Statement for Expression {
 
         if let ExpressionEnum::VariableNamedExtract(location, _) = &self.expression_enum {
             let location = self.expression_location(data).or_else(|| self.allocate_and_store(data, location))?;
+            let dt = self.data_type.as_ref()?.produce_llvm_type(data.context).as_basic_type_enum();
+            let adjusted_location = data.builder.build_pointer_cast(location, dt.ptr_type(AddressSpace::default()), "__tmp__");
 
-            return Some(Box::new(data.builder.build_load(location, "__tmp__")));
+            return Some(Box::new(data.builder.build_load(adjusted_location, "__tmp__")));
         }
 
         if let ExpressionEnum::FunctionCall(name, args) = &self.expression_enum {
@@ -254,7 +256,7 @@ impl Expression {
         if let ExpressionEnum::VariableExtract(ref location, ref slot) = self.expression_enum {
 
             // let ptr = data.variable_table.borrow()[name];
-            let ptr: PointerValue = location.expression_location(data)?;
+            let mut ptr: PointerValue = location.expression_location(data)?;
             let slot_value = slot
                 .visit(data)
                 .unwrap()
@@ -266,6 +268,10 @@ impl Expression {
                     Some(ref v) => {
                         match v.value {
                             DataTypeEnum::Array(_,_) => vec![zero, slot_value],
+                            DataTypeEnum::Pointer(_) => {
+                                ptr = data.builder.build_load(ptr, "__tmp__").into_pointer_value();
+                                vec![slot_value]
+                            },
                             _ => vec![slot_value],
                         }
                     },
@@ -446,7 +452,7 @@ impl Expression {
                         Some(a.symbol.clone())
                     },
                     DataTypeEnum::Pointer(ref interior) => {
-                        Some(interior.symbol.clone())
+                        Some(format!("{}", interior.symbol.clone()))
                     },
                     _ => {
                         None
@@ -526,6 +532,21 @@ impl Expression {
                 )),
                 _ => unimplemented!(),
             };
+
+            return Some(result);
+        }
+        if compiled.is_pointer_value() && resultant.starts_with('&') {
+            let element_type = compiled.into_array_value().get_type().get_element_type();
+            let pointer_type = element_type.ptr_type(AddressSpace::default());
+            let basic_value: BasicValueEnum = compiled.try_into().unwrap();
+
+            let result: Box<dyn AnyValue> = Box::new(
+                data.builder.build_bitcast(
+                    basic_value,
+                    pointer_type,
+                    "__tmp__"
+                )
+            );
 
             return Some(result);
         }

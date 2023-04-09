@@ -1,4 +1,4 @@
-use crate::ast::{Expression, RootScope};
+use crate::ast::{Expression, ExternFunction, RootScope};
 use crate::parsing::ParsingError::MissingToken;
 use crate::{
     ast::{
@@ -98,8 +98,18 @@ impl Parser {
                 // }
                 Token::Struct => {
                     self.parse_struct_value()?;
+                },
+                Token::Extern => {
+                    self.parse_extern_function()?;
                 }
                 Token::EOL => {}
+                Token::Identifier(ref iden) if self.scope_stack.contains_function(iden) => {
+                    let Ok(mut expression) = self.parse_expression_choice(true) else {
+                        continue;
+                    };
+                    expression.attach_data_types(&self.scope_stack, &self.data_types);
+                    self.scope_stack.commands_mut().push(Box::new(expression));
+                },
                 _ => {
                     let Ok(mut expression) = self.parse_expression_choice(false) else {
                         continue;
@@ -277,6 +287,52 @@ impl Parser {
             value: crate::ast::DataTypeEnum::Struct(data_type_list, name_map)
         };
         self.data_types.insert(struct_name, struct_data_type);
+        Ok(())
+    }
+
+    fn parse_extern_function(&mut self) -> ParsingResult<()> {
+        if self.current_token() != Token::Extern {
+            return Err(Box::new(MissingToken))
+        }
+
+        if self.next() != Token::Def {
+            return Err(Box::new(MissingToken));
+        }
+
+        let mut func_name = String::new();
+
+        {
+            let Token::Identifier(fn_name) = self.next() else {
+                return Err(Box::new(MissingToken));
+            };
+
+            func_name = fn_name;
+        }
+
+        if Token::OpenParenth != self.next() {
+            return Err(Box::new(MissingToken));
+        };
+        let (mut next, params) = self.parse_data_type_list()?;
+
+        next = self.next();
+        let mut return_type = None;
+        if next == Token::Colon {
+            next = self.next();
+            let mut data_type_parser = DataTypeParser::new(&self.data_types);
+            while data_type_parser.consume(next.clone()) {
+                next = self.next();
+            }
+            return_type = Some(data_type_parser.build());
+        }
+
+        let mut extern_function = Function::new(return_type.clone());
+        extern_function.name = func_name.to_string();
+        extern_function.params = params;
+        extern_function.is_extern = true;
+
+        self.scope_stack.commands_mut().push(Box::new(extern_function));
+        self.scope_stack
+            .add_function(&func_name, return_type);
         Ok(())
     }
 

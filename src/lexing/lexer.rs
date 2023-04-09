@@ -88,6 +88,10 @@ impl Lexer {
                             string.push('\n');
                             self.pop();
                         }
+                        '0' => {
+                            string.push('\0');
+                            self.pop();
+                        }
                         _ => panic!("Invalid Escaped Character"),
                     };
                     escaped = false;
@@ -114,6 +118,10 @@ impl Lexer {
                         '"' => string.push(self.pop()),
                         'n' => {
                             string.push('\n');
+                            self.pop();
+                        }
+                        '0' => {
+                            string.push('\0');
                             self.pop();
                         }
                         _ => panic!("Invalid Escaped Character"),
@@ -158,6 +166,7 @@ impl Lexer {
                 "as" => Token::As,
                 "else" => Token::Else,
                 "struct" => Token::Struct,
+                "extern" => Token::Extern,
                 "return" => Token::Return,
                 _ => Token::Identifier(current_string),
             };

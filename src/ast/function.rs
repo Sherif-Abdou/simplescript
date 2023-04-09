@@ -13,6 +13,7 @@ pub struct Function {
     pub commands: Vec<Box<dyn Statement>>,
     pub variables: HashMap<String, Variable>,
     pub functions: HashMap<String, Option<DataType>>,
+    pub is_extern: bool,
     pub name: String,
 }
 
@@ -24,6 +25,7 @@ impl Function {
             commands: vec![],
             variables: Default::default(),
             functions: Default::default(),
+            is_extern: false,
             name: "".to_string(),
         }
     }
@@ -84,27 +86,31 @@ impl Statement for Function {
             None => data.context.void_type().fn_type(&param_types, false),
         };
         let fn_value = data.module.add_function(&self.name, fn_type, None);
-        let values = fn_value.get_params();
-        let mut param_map = HashMap::new();
-        for i in 0..values.len() {
-            let name = self.params[i].0.clone();
-            let value = values[i];
-            param_map.insert(name.clone(), value);
-        }
-        let refcell = RefCell::new(param_map);
-        data.current_function_params.swap(&refcell);
-        let block = data.context.append_basic_block(fn_value, "entry");
-        data.builder.position_at_end(block);
         data.function_table
             .borrow_mut()
             .insert(self.name.clone(), fn_value);
-        for command in &self.commands {
-            command.visit(data);
+        if !self.is_extern {
+            let values = fn_value.get_params();
+            let mut param_map = HashMap::new();
+            for i in 0..values.len() {
+                let name = self.params[i].0.clone();
+                let value = values[i];
+                param_map.insert(name.clone(), value);
+            }
+            let refcell = RefCell::new(param_map);
+            data.current_function_params.swap(&refcell);
+            let block = data.context.append_basic_block(fn_value, "entry");
+            data.builder.position_at_end(block);
+
+            for command in &self.commands {
+                command.visit(data);
+            }
+            for name in self.variables.keys() {
+                data.variable_table.borrow_mut().remove(name);
+                data.variable_type.borrow_mut().remove(name);
+            }
         }
-        for name in self.variables.keys() {
-            data.variable_table.borrow_mut().remove(name);
-            data.variable_type.borrow_mut().remove(name);
-        }
-        return Some(Box::new(fn_value));
+
+        Some(Box::new(fn_value))
     }
 }
