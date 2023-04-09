@@ -28,6 +28,7 @@ pub type ParsingResult<T> = Result<T, Box<dyn Error>>;
 #[derive(Debug)]
 pub enum ParsingError {
     MissingToken,
+    ExpressionFailure,
 }
 
 impl Display for ParsingError {
@@ -75,37 +76,80 @@ impl Parser {
 
     pub fn parse(&mut self) -> ParsingResult<Box<dyn Scope>> {
         while self.current_token() != Token::EOF {
-            if self.current_token() == Token::Def {
-                self.parse_function()?
-            } else if self.current_token() == Token::Return {
-                self.parse_return()?;
-            } else if self.current_token() == Token::If {
-                self.parse_if_statement()?;
-            } else if let Token::Identifier(_) = self.current_token() {
-                let expression = self
-                    .parse_expression_choice(false)
-                    .expect("Couldn't parse expected expression");
-                if let ExpressionEnum::VariableRead(ref iden) = expression.borrow() {
-                    self.parse_set_variable(iden)?;
-                } else {
-                    self.parse_insert_value(expression)?;
+            match self.current_token() {
+                Token::Def => self.parse_function()?,
+                Token::Return => self.parse_return()?,
+                Token::If => self.parse_if_statement()?,
+                Token::ClosedCurly => {
+                    let mut thing = self.scope_stack.pop_front().unwrap();
+                    thing.wrap_up_parsing(self);
+                    self.scope_stack
+                        .peek_front_mut()
+                        .unwrap()
+                        .commands_mut()
+                        .push(thing);
                 }
-            } else if self.current_token() == Token::Star {
-                let expression = self
-                    .parse_expression_choice(false)
-                    .expect("Couldn't parse expected expression");
-                self.parse_insert_value(expression)?;
-            } else if Token::ClosedCurly == self.current_token() {
-                let mut thing = self.scope_stack.pop_front().unwrap();
-                thing.wrap_up_parsing(self);
-                self.scope_stack
-                    .peek_front_mut()
-                    .unwrap()
-                    .commands_mut()
-                    .push(thing);
-            } else if Token::Struct == self.current_token() {
-                self.parse_struct_value()?;
+                // Token::Star => {
+                //     let mut expression = self
+                //         .parse_expression_choice(false)
+                //         .expect("Couldn't parse expected expression");
+                //     expression.attach_data_types(&self.scope_stack, &self.data_types);
+                //     self.parse_insert_value(expression)?;
+                // }
+                Token::Struct => {
+                    self.parse_struct_value()?;
+                }
+                Token::EOL => {}
+                _ => {
+                    let Ok(mut expression) = self.parse_expression_choice(false) else {
+                        continue;
+                    };
+                    expression.attach_data_types(&self.scope_stack, &self.data_types);
+                    if self.current_token() == Token::Equal {
+                        if let ExpressionEnum::VariableRead(ref iden) = expression.borrow() {
+//                            dbg!("Set variable");
+                            self.parse_set_variable(iden)?;
+                        } else {
+                            self.parse_insert_value(expression)?;
+                        }
+                    } else {
+                        self.scope_stack.commands_mut().push(Box::new(expression));
+                    }
+                }
             }
+            // if self.current_token() == Token::Def {
+            //     self.parse_function()?
+            // } else if self.current_token() == Token::Return {
+            //     self.parse_return()?;
+            // } else if self.current_token() == Token::If {
+            //     self.parse_if_statement()?;
+            // } else if let Token::Identifier(_) = self.current_token() {
+            //     let mut expression = self
+            //         .parse_expression_choice(false)
+            //         .expect("Couldn't parse expected expression");
+            //     expression.attach_data_types(&self.scope_stack, &self.data_types);
+            //     if let ExpressionEnum::VariableRead(ref iden) = expression.borrow() {
+            //         self.parse_set_variable(iden)?;
+            //     } else {
+            //         self.parse_insert_value(expression)?;
+            //     }
+            // } else if self.current_token() == Token::Star {
+            //     let mut expression = self
+            //         .parse_expression_choice(false)
+            //         .expect("Couldn't parse expected expression");
+            //     expression.attach_data_types(&self.scope_stack, &self.data_types);
+            //     self.parse_insert_value(expression)?;
+            // } else if Token::ClosedCurly == self.current_token() {
+            //     let mut thing = self.scope_stack.pop_front().unwrap();
+            //     thing.wrap_up_parsing(self);
+            //     self.scope_stack
+            //         .peek_front_mut()
+            //         .unwrap()
+            //         .commands_mut()
+            //         .push(thing);
+            // } else if Token::Struct == self.current_token() {
+            //     self.parse_struct_value()?;
+            // }
             self.next();
         }
 
@@ -143,17 +187,17 @@ impl Parser {
     }
 
     fn parse_expression_choice(&mut self, checked: bool) -> ParsingResult<Expression> {
-        let mut expr_parser = ExpressionParser::default();
+        let mut expr_parser = ExpressionParser::default()
+                .with_data_types(Some(&self.data_types));
         if checked {
             expr_parser = expr_parser
                 .with_scope(Some(&self.scope_stack))
-                .with_data_types(Some(&self.data_types));
         }
         while expr_parser.consume(self.current_token())? {
             self.next();
         }
 
-        let mut built_expression: Expression = expr_parser.build().unwrap().into();
+        let mut built_expression: Expression = expr_parser.build().ok_or(ParsingError::ExpressionFailure)?.into();
         if checked {
             built_expression.attach_data_types(&self.scope_stack, &self.data_types);
         }
@@ -162,6 +206,7 @@ impl Parser {
 
     fn parse_set_variable(&mut self, iden: &str) -> ParsingResult<()> {
         let val = self.current_token();
+
         if val == Token::Colon {
             let mut data_type_parser = DataTypeParser::new(&self.data_types);
             while data_type_parser.consume(self.next()) {}
@@ -291,7 +336,10 @@ impl Parser {
     fn parse_data_type_list(&mut self) -> ParsingResult<(Token, Vec<(String, DataType)>)> {
         let mut next = self.next();
         let mut params = Vec::new();
-        while next != Token::CloseParenth {
+        while next != Token::CloseParenth && next != Token::ClosedCurly {
+            while next == Token::EOL {
+                next = self.next();
+            }
             let Token::Identifier(iden) = next.clone() else {
                 return Err(Box::new(MissingToken));
             };

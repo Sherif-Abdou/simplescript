@@ -94,6 +94,12 @@ impl Statement for Expression {
             return Some(Box::new(value));
         }
 
+        if let ExpressionEnum::StructLiteral(_) = &self.expression_enum {
+            let data_type = self.data_type.as_ref().unwrap();
+            let t = data_type.produce_llvm_type(data.context).as_basic_type_enum();
+            return Some(Box::new(t.const_zero()))
+        }
+
         if let ExpressionEnum::Array(ref values) = &self.expression_enum {
             let expressions: Vec<Box<dyn AnyValue>> =
                 values.iter().map(|v| v.visit(data)).flatten().collect();
@@ -156,8 +162,8 @@ impl Statement for Expression {
             return Some(Box::new(data.builder.build_load(location, "__tmp__")));
         }
 
-        if let ExpressionEnum::VariableNamedExtract(_, _) = &self.expression_enum {
-            let location = self.expression_location(data).unwrap();
+        if let ExpressionEnum::VariableNamedExtract(location, _) = &self.expression_enum {
+            let location = self.expression_location(data).or_else(|| self.allocate_and_store(data, location))?;
 
             return Some(Box::new(data.builder.build_load(location, "__tmp__")));
         }
@@ -299,7 +305,7 @@ impl Expression {
         {
             let dereference = data
                 .builder
-                .build_load(interior.expression_location(data).unwrap(), "__tmp__");
+                .build_load(interior.expression_location(data)?, "__tmp__");
             let as_ptr_type = dereference.into_pointer_value();
 
             return Some(as_ptr_type);
@@ -392,11 +398,10 @@ impl Expression {
     ) -> Option<String> {
         return match &self.expression_enum {
             ExpressionEnum::Binary(l, r, _) => {
-                if l.as_ref().unwrap().data_type == r.as_ref().unwrap().data_type {
+                if l.as_ref()?.data_type == r.as_ref()?.data_type {
                     return l
                         .as_ref()
-                        .or(r.as_ref())
-                        .unwrap()
+                        .or(r.as_ref())?
                         .data_type
                         .as_ref()
                         .map(|v| v.symbol.clone());
@@ -410,22 +415,22 @@ impl Expression {
                         interior
                             .data_type
                             .as_ref()
-                            .map(|v| v.symbol.clone())
-                            .unwrap()
+                            .map(|v| v.symbol.clone())?
                     ),
                     UnaryExpressionType::Dereference => {
-                        interior.data_type.as_ref().unwrap().symbol[1..].to_string()
+                        interior.data_type.as_ref()?.symbol[1..].to_string()
                     }
                 };
                 Some(thing)
             }
             ExpressionEnum::VariableRead(ref v) => {
-                Some(scope.get_variable(v).unwrap().data_type.symbol.clone())
+                Some(scope.get_variable(v)?.data_type.symbol.clone())
             }
             ExpressionEnum::IntegerLiteral(_) => Some("i64".to_string()),
             ExpressionEnum::FloatLiteral(_) => Some("f64".to_string()),
             ExpressionEnum::StringLiteral(ref s) => Some(format!("[char:{}]", s.len())),
             ExpressionEnum::CharLiteral(_) => Some("char".to_string()),
+            ExpressionEnum::StructLiteral(ref s) => Some(s.to_string()),
             ExpressionEnum::Array(ref list) => {
                 Some(format!(
                     "[{}:{}]",
@@ -458,7 +463,7 @@ impl Expression {
                 None
             }
             ExpressionEnum::FunctionCall(ref name, _) => {
-                let result = scope.return_type_of(name).unwrap().produce_string();
+                let result = scope.return_type_of(name)?.produce_string();
                 Some(result)
             }
             ExpressionEnum::ExpressionCast(_, res) => Some(res.clone()),
@@ -483,7 +488,17 @@ impl Expression {
         None
     }
 
+    fn allocate_and_store<'a>(&'a self, data: &'a Compiler, expression: &Expression) -> Option<PointerValue<'a>> {
+        let produced_type = expression.data_type.as_ref();
+        let dt = produced_type?.produce_llvm_type(data.context).as_basic_type_enum();
+        let allocated_space = data.builder.build_alloca(dt, "__tmp__");
 
+        let visited: BasicValueEnum = expression.visit(data).unwrap().as_any_value_enum().try_into().unwrap();
+
+        data.builder.build_store(allocated_space, visited);
+
+        Some(allocated_space)
+    }
 
     fn visit_cast<'a>(&'a self, data: &'a Compiler) -> Option<Box<dyn AnyValue + 'a>> {
         let ExpressionEnum::ExpressionCast(interior, resultant) = &self.expression_enum else {
@@ -534,6 +549,7 @@ pub enum ExpressionEnum {
     IntegerLiteral(i64),
     FloatLiteral(f64),
     StringLiteral(String),
+    StructLiteral(String),
     CharLiteral(u8),
     ExpressionCast(Box<Expression>, String),
 }

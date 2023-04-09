@@ -1,13 +1,26 @@
+struct Point {
+    x: i64,
+    y: i64
+}
+
 def double(x: i64): i64 {
     return x * 2
 }
 
-def main(): f64 {
+def triple(x: i64): Point {
+    res = Point()
+    res.x = x * 3
+    return res
+}
+
+def main(): i64 {
     arr = [1,2,3]
+    d = Point()
+    arr[0] = 3
     r = &(arr[0])
     *r = 13
     if arr[0] == 12 {
         return (1000 as f64) as i64
     }
-    return (2000 as f64) as i64
+    return triple(3).x
 }

@@ -1,4 +1,4 @@
-use crate::ast::{BinaryExpressionType, Expression, ExpressionEnum, Scope, UnaryExpressionType, DataType};
+use crate::ast::{BinaryExpressionType, Expression, ExpressionEnum, Scope, UnaryExpressionType, DataType, DataTypeEnum};
 use crate::lexing::Token;
 use crate::parsing::sub_expression_parser::SubExpressionParser;
 use crate::parsing::ParsingResult;
@@ -271,23 +271,14 @@ impl<'a> ExpressionParser<'a> {
             );
         }
 
-        // Handle a data type casting
-        // TODO: Use 'as' syntax instead for easier parsing
+        // Handle struct literal
         if self.data_types.map(|dt| dt.contains_key(identifier)).unwrap_or(false) {
-            let data_type = self.data_types.unwrap()[identifier].clone();
-            assert_eq!(slots[0], Slot::Token(Token::OpenParenth));
-            let close_position = self.find_close_parenth(slots);
-            let subsection = slots.clone();
-            slots.set_end_to(close_position as usize);
-            slots.shift_by(1);
-            let to_convert: Expression = self.parse(&subsection)?.into();
-            slots.shift_by((close_position + 1) as usize);
-
-            let expression = ExpressionEnum::ExpressionCast(Box::new(to_convert), data_type.symbol);
-
-            return Some(
-                expression
-            );
+            if let (Slot::Token(Token::OpenParenth), Slot::Token(Token::CloseParenth)) = (&slots[0], &slots[1]) {
+                slots.shift_by(2);
+                return Some(
+                    ExpressionEnum::StructLiteral(identifier.to_string())
+                );
+            }
         }
         None
     }
@@ -390,7 +381,7 @@ impl<'a> ExpressionParser<'a> {
             Slot::Token(Token::As) => {
                 slots.pop();
                 let mut data_type_parser = DataTypeParser::new(&self.data_types.unwrap());
-                while data_type_parser.consume(slots[0].clone().try_into().unwrap()) {
+                while !slots.is_empty() && data_type_parser.consume(slots[0].clone().try_into().unwrap()) {
                     slots.pop();
                 }
 
@@ -401,6 +392,19 @@ impl<'a> ExpressionParser<'a> {
                         data_type.produce_string()
                 ), slots)
             },
+            // Handle extracting members from structs
+            Slot::Token(Token::Dot) => {
+                slots.pop();
+                let Slot::Token(Token::Identifier(name)) = slots.pop() else {
+                    return None;
+                };
+
+                let new_expression = ExpressionEnum::VariableNamedExtract(
+                    Box::new(old_expression.into()), 
+                    name.clone());
+                
+                self.check_for_postfix(new_expression, slots)
+            }
             // No postfix, just return the expression
             _ => Some(old_expression),
         }
