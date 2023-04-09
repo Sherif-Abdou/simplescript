@@ -1,4 +1,4 @@
-use crate::ast::{Expression, ExternFunction, RootScope};
+use crate::ast::{Expression, RootScope, WhileLoop};
 use crate::parsing::ParsingError::MissingToken;
 use crate::{
     ast::{
@@ -80,6 +80,7 @@ impl Parser {
                 Token::Def => self.parse_function()?,
                 Token::Return => self.parse_return()?,
                 Token::If => self.parse_if_statement()?,
+                Token::While => self.parse_while_loop()?,
                 Token::ClosedCurly => {
                     let mut thing = self.scope_stack.pop_front().unwrap();
                     thing.wrap_up_parsing(self);
@@ -177,6 +178,21 @@ impl Parser {
         }
 
         let condition = IfCondition::new(condition);
+        self.scope_stack.push_front(Box::new(condition));
+        Ok(())
+    }
+
+    fn parse_while_loop(&mut self) -> ParsingResult<()> {
+        if self.current_token() != Token::While {
+            return Err(Box::new(MissingToken));
+        }
+        let mut _token = self.next();
+        let condition = self.parse_expression()?;
+        if self.current_token() != Token::OpenCurly {
+            return Err(Box::new(MissingToken));
+        }
+
+        let condition = WhileLoop::new(condition);
         self.scope_stack.push_front(Box::new(condition));
         Ok(())
     }

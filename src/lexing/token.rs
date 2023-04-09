@@ -8,6 +8,7 @@ pub enum Token {
     Def,
     As,
     Struct,
+    While,
     Extern,
     Return,
     OpenCurly,

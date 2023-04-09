@@ -18,10 +18,16 @@ def triple(x: i64): Point {
 def main(): i64 {
     j = [1, 2, 3]
     v = malloc(10)
+    i = 0
+    while i < 10 {
+        v[i] = ' '
+        i = i + 1
+    }
     gets(v)
-    putchar(v[0])
-    putchar(v[1])
-    putchar(v[2])
-    putchar(v[3])
+    i = 0
+    while i < 10 {
+        putchar(v[i])
+        i = i + 1
+    }
     return 0
 }

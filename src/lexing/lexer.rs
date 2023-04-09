@@ -163,6 +163,7 @@ impl Lexer {
             return match current_string.as_str() {
                 "def" => Token::Def,
                 "if" => Token::If,
+                "while" => Token::While,
                 "as" => Token::As,
                 "else" => Token::Else,
                 "struct" => Token::Struct,

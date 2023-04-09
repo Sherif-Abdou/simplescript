@@ -9,7 +9,9 @@ mod scope;
 mod setvariable;
 mod statement;
 mod variable;
+mod whileloop;
 
+pub use whileloop::*;
 pub use datatype::*;
 pub use expression::*;
 pub use function::*;
