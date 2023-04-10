@@ -164,6 +164,7 @@ impl Statement for Expression {
 
         if let ExpressionEnum::VariableNamedExtract(location, _) = &self.expression_enum {
             let location = self.expression_location(data).or_else(|| self.allocate_and_store(data, location))?;
+            // dbg!(&data.current_function_params, &self.data_type);
             let dt = self.data_type.as_ref()?.produce_llvm_type(data.context).as_basic_type_enum();
             let adjusted_location = data.builder.build_pointer_cast(location, dt.ptr_type(AddressSpace::default()), "__tmp__");
 
@@ -249,6 +250,9 @@ impl Expression {
         };
 
         let expression_type = self.expression_type(scope, data_types);
+        if expression_type.is_none() {
+            // dbg!(&self.expression_enum);
+        }
         self.data_type = expression_type;
     }
 
@@ -394,6 +398,7 @@ impl Expression {
 
             return Box::new(value.as_any_value_enum());
         }
+        dbg!(&parsed_left, &parsed_right);
         unimplemented!()
     }
 
@@ -430,6 +435,9 @@ impl Expression {
                 Some(thing)
             }
             ExpressionEnum::VariableRead(ref v) => {
+                if v.as_str() == "str" {
+                    dbg!(scope.get_variable(v).is_some());
+                }
                 Some(scope.get_variable(v)?.data_type.symbol.clone())
             }
             ExpressionEnum::IntegerLiteral(_) => Some("i64".to_string()),
@@ -466,6 +474,13 @@ impl Expression {
 
                     return Some(interior_type.produce_string());
                 }
+                // if let DataTypeEnum::Pointer(ref interior) = data_type.value {
+                //     if let DataTypeEnum::Struct(ref slots, ref name_map) = interior.value {
+                //         let interior_type = slots[name_map[name] as usize].as_ref();
+                //
+                //         return Some(interior_type.produce_string());
+                //     }
+                // }
                 None
             }
             ExpressionEnum::FunctionCall(ref name, _) => {

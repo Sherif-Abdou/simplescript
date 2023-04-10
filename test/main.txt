@@ -2,32 +2,34 @@ extern def log(x: f64): f64
 extern def putchar(x: char): i64
 extern def gets(buffer: &char): &char
 extern def malloc(size: i64): &char
+extern def puts(str: &char): i64
 extern def free(ptr: &char)
 
-struct Point {
-    x: i64,
-    y: i64
+struct String {
+    internal: &char,
+    len: i64
 }
 
-def triple(x: i64): Point {
-    res = Point()
-    res.x = x * 3
-    return res
+def make_string(len: i64): String {
+    s = String()
+    s.len = len
+    s.internal = malloc(s.len)
+
+    return s
+}
+
+def print_string(str: &String) {
+    y = *str
+    i = 0
+    while y.internal[i] != '\0' {
+        putchar(y.internal[i])
+        i = i + 1
+    }
 }
 
 def main(): i64 {
-    j = [1, 2, 3]
-    v = malloc(10)
-    i = 0
-    while i < 10 {
-        v[i] = ' '
-        i = i + 1
-    }
-    gets(v)
-    i = 0
-    while i < 10 {
-        putchar(v[i])
-        i = i + 1
-    }
+    s = make_string(10)
+    gets(s.internal)
+    print_string(&s)
     return 0
 }

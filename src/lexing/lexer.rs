@@ -152,8 +152,8 @@ impl Lexer {
             return Token::Integer(current_string.parse().unwrap());
         }
 
-        if current.is_alphabetic() {
-            while current.is_alphanumeric() && !self.empty() {
+        if current.is_alphabetic() || current == '_' {
+            while (current.is_alphanumeric() || current == '_') && !self.empty() {
                 current_string.push(self.pop());
                 if self.peek().is_none() {
                     break;

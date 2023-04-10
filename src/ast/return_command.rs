@@ -4,11 +4,11 @@ use inkwell::values::BasicValue;
 use super::{Statement};
 
 pub struct ReturnCommand {
-    value: Expression,
+    value: Option<Expression>,
 }
 
 impl ReturnCommand {
-    pub fn new(value: Expression) -> Self {
+    pub fn new(value: Option<Expression>) -> Self {
         Self { value }
     }
 }
@@ -18,7 +18,11 @@ impl Statement for ReturnCommand {
         &'a self,
         data: &'a super::Compiler,
     ) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        let raw_visited = self.value.visit(data);
+        if self.value.is_none() {
+            data.builder.build_return(None);
+            return None;
+        }
+        let raw_visited = self.value.as_ref()?.visit(data);
         let visited = raw_visited.unwrap().as_any_value_enum();
         let basic_value: &dyn BasicValue = match visited {
             inkwell::values::AnyValueEnum::ArrayValue(ref a) => a,

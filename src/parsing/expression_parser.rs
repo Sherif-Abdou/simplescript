@@ -154,7 +154,10 @@ impl<'a> ExpressionParser<'a> {
         subslots.shift_by(1);
 
         slots.shift_by((close_position + 1) as usize);
-        self.parse(&subslots)
+        self.check_for_postfix(
+            self.parse(&subslots)?,
+            slots
+        )
     }
 
     /// Finds the closing parenthesis in the same layer

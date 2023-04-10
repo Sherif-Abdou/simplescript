@@ -188,6 +188,7 @@ impl Parser {
         }
         let mut _token = self.next();
         let condition = self.parse_expression()?;
+        // dbg!(&condition);
         if self.current_token() != Token::OpenCurly {
             return Err(Box::new(MissingToken));
         }
@@ -202,7 +203,7 @@ impl Parser {
             return Err(Box::new(MissingToken));
         }
         self.next();
-        let value = self.parse_expression()?;
+        let value = self.parse_expression().ok();
         let command = ReturnCommand::new(value);
         self.scope_stack.commands_mut().push(Box::new(command));
         Ok(())
