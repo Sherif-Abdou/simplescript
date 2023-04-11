@@ -408,6 +408,21 @@ impl<'a> ExpressionParser<'a> {
                 
                 self.check_for_postfix(new_expression, slots)
             }
+            Slot::Token(Token::Arrow) => {
+                slots.pop();
+                let Slot::Token(Token::Identifier(name)) = slots.pop() else {
+                    return None;
+                };
+
+                let new_expression = ExpressionEnum::VariableNamedExtract(
+                    Box::new(
+                    ExpressionEnum::Unary(Some(Box::new(old_expression.into())), UnaryExpressionType::Dereference).into()
+                    ), 
+                    name.clone()
+                );
+                
+                self.check_for_postfix(new_expression, slots)
+            }
             // No postfix, just return the expression
             _ => Some(old_expression),
         }

@@ -34,6 +34,7 @@ pub enum Token {
     Equal,
     Colon,
     Comma,
+    Arrow,
     EOL,
     EOF,
 }

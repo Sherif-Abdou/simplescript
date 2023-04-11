@@ -316,9 +316,13 @@ impl Expression {
             let dereference = data
                 .builder
                 .build_load(interior.expression_location(data)?, "__tmp__");
-            let as_ptr_type = dereference.into_pointer_value();
+            if dereference.is_pointer_value() {
+                let as_ptr_type = dereference.into_pointer_value();
 
-            return Some(as_ptr_type);
+                return Some(as_ptr_type);
+            } else {
+                return interior.expression_location(data);
+            }
         }
 
         None
@@ -435,9 +439,6 @@ impl Expression {
                 Some(thing)
             }
             ExpressionEnum::VariableRead(ref v) => {
-                if v.as_str() == "str" {
-                    dbg!(scope.get_variable(v).is_some());
-                }
                 Some(scope.get_variable(v)?.data_type.symbol.clone())
             }
             ExpressionEnum::IntegerLiteral(_) => Some("i64".to_string()),

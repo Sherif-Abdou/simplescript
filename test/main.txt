@@ -2,34 +2,54 @@ extern def log(x: f64): f64
 extern def putchar(x: char): i64
 extern def gets(buffer: &char): &char
 extern def malloc(size: i64): &char
+extern def realloc(ptr: &char, size: i64): &char
 extern def puts(str: &char): i64
 extern def free(ptr: &char)
 
 struct String {
     internal: &char,
+    capacity: i64,
     len: i64
 }
 
-def make_string(len: i64): String {
+def make_string(capacity: i64): String {
     s = String()
-    s.len = len
-    s.internal = malloc(s.len)
+    s.capacity = capacity
+    s.len = 0
+    s.internal = malloc(capacity)
 
     return s
 }
 
-def print_string(str: &String) {
-    y = *str
-    i = 0
-    while y.internal[i] != '\0' {
-        putchar(y.internal[i])
-        i = i + 1
+def string_append_char(s: &String, c: char): i64 {
+    if s->len > s->capacity {
+        s->capacity = s->capacity * 2
+        s->internal = realloc(s->internal, s->capacity)
+        putchar('u')
+        putchar('\n')
     }
+    s->internal[s->len] = c
+    s->len = s->len + 1
+    return 0
+}
+
+def free_string(str: &String): i64 {
+    s = *str
+    free(s.internal)
+    return 0
 }
 
 def main(): i64 {
-    s = make_string(10)
-    gets(s.internal)
-    print_string(&s)
+    s = make_string(1)
+    
+    string_append_char(&s, 'h')
+    string_append_char(&s, 'e')
+    string_append_char(&s, 'l')
+    string_append_char(&s, 'l')
+    string_append_char(&s, 'o')
+    string_append_char(&s, '\0')
+    if s.internal[0] == 'h' {
+        puts(s.internal)
+    }
     return 0
 }

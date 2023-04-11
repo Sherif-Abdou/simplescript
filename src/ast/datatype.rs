@@ -1,4 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
+use std::os::unix::raw::dev_t;
 
 use inkwell::{
     context::Context,
@@ -21,6 +22,18 @@ pub enum DataTypeEnum {
 pub struct DataType {
     pub symbol: String,
     pub value: DataTypeEnum,
+}
+
+impl From<DataTypeEnum> for DataType {
+    fn from(value: DataTypeEnum) -> Self {
+        let mut data_type = DataType {
+            value,
+            symbol: "".to_string()
+        };
+        data_type.symbol = data_type.produce_string();
+
+        data_type
+    }
 }
 
 impl DataType {

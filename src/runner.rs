@@ -34,6 +34,9 @@ pub fn run(file: String) {
         .unwrap();
     unsafe {
         let main: JitFunction<MainFunc> = engine.get_function("main").unwrap();
-        println!("Result: {:?}", main.call());
+        if main.call() != 0 {
+            eprintln!("Error");
+        }
+        // println!("Result: {:?}", main.call());
     }
 }

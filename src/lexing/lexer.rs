@@ -33,6 +33,10 @@ impl Lexer {
 
         let sc_token = match current {
             '+' => Some(Token::Plus),
+            '-' if self.peek_next() == Some('>') => {
+                self.pop();
+                Some(Token::Arrow)
+            },
             '-' => Some(Token::Minus),
             '*' => Some(Token::Star),
             '/' => Some(Token::Slash),
