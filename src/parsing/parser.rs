@@ -128,39 +128,6 @@ impl Parser {
                     }
                 }
             }
-            // if self.current_token() == Token::Def {
-            //     self.parse_function()?
-            // } else if self.current_token() == Token::Return {
-            //     self.parse_return()?;
-            // } else if self.current_token() == Token::If {
-            //     self.parse_if_statement()?;
-            // } else if let Token::Identifier(_) = self.current_token() {
-            //     let mut expression = self
-            //         .parse_expression_choice(false)
-            //         .expect("Couldn't parse expected expression");
-            //     expression.attach_data_types(&self.scope_stack, &self.data_types);
-            //     if let ExpressionEnum::VariableRead(ref iden) = expression.borrow() {
-            //         self.parse_set_variable(iden)?;
-            //     } else {
-            //         self.parse_insert_value(expression)?;
-            //     }
-            // } else if self.current_token() == Token::Star {
-            //     let mut expression = self
-            //         .parse_expression_choice(false)
-            //         .expect("Couldn't parse expected expression");
-            //     expression.attach_data_types(&self.scope_stack, &self.data_types);
-            //     self.parse_insert_value(expression)?;
-            // } else if Token::ClosedCurly == self.current_token() {
-            //     let mut thing = self.scope_stack.pop_front().unwrap();
-            //     thing.wrap_up_parsing(self);
-            //     self.scope_stack
-            //         .peek_front_mut()
-            //         .unwrap()
-            //         .commands_mut()
-            //         .push(thing);
-            // } else if Token::Struct == self.current_token() {
-            //     self.parse_struct_value()?;
-            // }
             self.next();
         }
 

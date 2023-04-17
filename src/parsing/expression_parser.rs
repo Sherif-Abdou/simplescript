@@ -1,4 +1,4 @@
-use crate::ast::{BinaryExpressionType, Expression, ExpressionEnum, Scope, UnaryExpressionType, DataType, DataTypeEnum};
+use crate::ast::{BinaryExpressionType, Expression, ExpressionEnum, Scope, UnaryExpressionType, DataType, DataTypeEnum, ExpressionBuilder};
 use crate::lexing::Token;
 use crate::parsing::sub_expression_parser::SubExpressionParser;
 use crate::parsing::ParsingResult;
@@ -85,10 +85,8 @@ impl<'a> Index<usize> for SlotList<'a> {
 
 #[derive(Default)]
 pub struct ExpressionParser<'a> {
-    raw: Vec<Token>,
     slots: Vec<Slot>,
     consuming_token_stack: VecDeque<Token>,
-    subparser: Option<Box<ExpressionParser<'a>>>,
     scope: Option<&'a dyn Scope>,
     data_types: Option<&'a HashMap<String, DataType>>,
 }
@@ -186,7 +184,10 @@ impl<'a> ExpressionParser<'a> {
 
         slots.shift_by((close_position + 1) as usize);
         let things = self.parse_comma_list(&subslots)?;
-        Some(ExpressionEnum::Array(things.into_iter().map(|v| v.into()).collect()))
+        let expression = ExpressionBuilder::new()
+            .array_literal(things.into_iter().map(|v| v.into()).collect())
+            .build();
+        Some(expression.into())
     }
 
     /// Finds the closing square bracket in the same layer
@@ -218,7 +219,7 @@ impl<'a> ExpressionParser<'a> {
             slots.shift_by(1);
             // Parse following expression and wrap it with unary operation
             return self.parse_local(slots)
-                .map(|v| ExpressionEnum::Unary(Some(Box::new(v.into())), unary_type));
+                .map(|v| ExpressionBuilder::new().unary(Some(Box::new(v.into())), unary_type).build().into());
         }
         None
     }
@@ -248,13 +249,13 @@ impl<'a> ExpressionParser<'a> {
         // If no scope attached, assume every identifier is some sort of variable
         let Some(scope) = self.scope else {
             return Some(
-                ExpressionEnum::VariableRead(identifier.to_string())
+                ExpressionBuilder::new().variable_read(identifier.to_string()).build().into()
             );
         };
 
         if scope.get_variable(identifier).is_some() {
             return Some(
-                ExpressionEnum::VariableRead(identifier.to_string())
+                ExpressionBuilder::new().variable_read(identifier.to_string()).build().into()
             );
         }
 
@@ -266,11 +267,11 @@ impl<'a> ExpressionParser<'a> {
             subsection.set_end_to(close_position as usize);
             subsection.shift_by(1);
             let arguments = self.parse_comma_list(&subsection)?;
-            let expression = ExpressionEnum::FunctionCall(identifier.clone(),
-                arguments.iter().map(|v| (v.clone()).into()).collect());
+            let expression = ExpressionBuilder::new().function_call(identifier.clone(),
+                arguments.iter().map(|v| (v.clone()).into()).collect()).build();
             slots.shift_by((close_position+1) as usize);
             return Some(
-                expression
+                expression.into()
             );
         }
 
@@ -279,7 +280,7 @@ impl<'a> ExpressionParser<'a> {
             if let (Slot::Token(Token::OpenParenth), Slot::Token(Token::CloseParenth)) = (&slots[0], &slots[1]) {
                 slots.shift_by(2);
                 return Some(
-                    ExpressionEnum::StructLiteral(identifier.to_string())
+                    ExpressionBuilder::new().struct_literal(identifier.to_string()).build().into()
                 );
             }
         }
@@ -329,11 +330,11 @@ impl<'a> ExpressionParser<'a> {
                 let right = self.parse(&right_list);
 
                 return Some(
-                    ExpressionEnum::Binary(
+                    ExpressionBuilder::new().binary(
                         left.map(|v| v.into()).map(Box::new),
                         right.map(|v| v.into()).map(Box::new),
                             Self::binary_token_to_type(operation.clone()),
-                    )
+                    ).build().into()
                 )
             }
         }
@@ -375,10 +376,10 @@ impl<'a> ExpressionParser<'a> {
                 let inside = self.parse(&subsection)?;
                 slots.shift_by(close_position as usize);
 
-                self.check_for_postfix(ExpressionEnum::VariableExtract(
+                self.check_for_postfix(ExpressionBuilder::new().variable_extract(
                     Box::new(old_expression.into()),
                     Box::new(inside.clone().into()),
-                ), slots)
+                ).build().into(), slots)
             },
             // Handle type casting expression
             Slot::Token(Token::As) => {
@@ -390,10 +391,10 @@ impl<'a> ExpressionParser<'a> {
 
                 let data_type = data_type_parser.build();
 
-                self.check_for_postfix(ExpressionEnum::ExpressionCast(
+                self.check_for_postfix(ExpressionBuilder::new().expression_cast(
                         Box::new(old_expression.into()),
                         data_type.produce_string()
-                ), slots)
+                ).build().into(), slots)
             },
             // Handle extracting members from structs
             Slot::Token(Token::Dot) => {
@@ -402,9 +403,10 @@ impl<'a> ExpressionParser<'a> {
                     return None;
                 };
 
-                let new_expression = ExpressionEnum::VariableNamedExtract(
+                let new_expression = ExpressionBuilder::new().variable_named_extract(
                     Box::new(old_expression.into()), 
-                    name.clone());
+                    name.clone()
+                    ).build().into();
                 
                 self.check_for_postfix(new_expression, slots)
             }
@@ -414,12 +416,12 @@ impl<'a> ExpressionParser<'a> {
                     return None;
                 };
 
-                let new_expression = ExpressionEnum::VariableNamedExtract(
+                let new_expression = ExpressionBuilder::new().variable_named_extract(
                     Box::new(
-                    ExpressionEnum::Unary(Some(Box::new(old_expression.into())), UnaryExpressionType::Dereference).into()
+                    ExpressionBuilder::new().unary(Some(Box::new(old_expression.into())), UnaryExpressionType::Dereference).build().into()
                     ), 
                     name.clone()
-                );
+                ).build().into();
                 
                 self.check_for_postfix(new_expression, slots)
             }
@@ -482,16 +484,16 @@ impl<'a> ExpressionParser<'a> {
         match token {
             Token::String(str) => self
                 .slots
-                .push(Slot::Expression(ExpressionEnum::StringLiteral(str))),
+                .push(Slot::Expression(ExpressionBuilder::new().string_literal(str).build().into())),
             Token::Char(chr) => self
                 .slots
-                .push(Slot::Expression(ExpressionEnum::CharLiteral(chr))),
+                .push(Slot::Expression(ExpressionBuilder::new().char_literal(chr).build().into())),
             Token::Integer(integer) => self
                 .slots
-                .push(Slot::Expression(ExpressionEnum::IntegerLiteral(integer))),
+                .push(Slot::Expression(ExpressionBuilder::new().integer_literal(integer).build().into())),
             Token::Float(float) => self
                 .slots
-                .push(Slot::Expression(ExpressionEnum::FloatLiteral(float))),
+                .push(Slot::Expression(ExpressionBuilder::new().float_literal(float).build().into())),
             Token::OpenSquare | Token::OpenParenth => {
                 self.slots.push(Slot::Token(token));
                 // self.subparser = Some(Box::new(ExpressionParser::default().with_scope(self.scope)))

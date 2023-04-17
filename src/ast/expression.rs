@@ -587,89 +587,8 @@ pub enum BinaryExpressionType {
     GreaterEqual,
 }
 
-impl BinaryExpressionType {
-    // Higher precedence operations are computed first
-    pub fn precedence(&self) -> i64 {
-        match self {
-            BinaryExpressionType::Addition => 1,
-            BinaryExpressionType::Subtraction => 1,
-            BinaryExpressionType::Multiplication => 2,
-            BinaryExpressionType::Division => 2,
-            _ => 0,
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum UnaryExpressionType {
     Reference,
     Dereference,
-}
-
-impl UnaryExpressionType {
-    pub fn precedence(&self) -> i64 {
-        match self {
-            UnaryExpressionType::Reference => 10,
-            UnaryExpressionType::Dereference => 10,
-        }
-    }
-}
-
-impl ExpressionEnum {
-    pub fn precedence(&self) -> i64 {
-        match self {
-            ExpressionEnum::Binary(_, _, t) => t.precedence(),
-            ExpressionEnum::Unary(_, t) => t.precedence(),
-            ExpressionEnum::VariableRead(_) => 100,
-            ExpressionEnum::IntegerLiteral(_) => 100,
-            ExpressionEnum::FloatLiteral(_) => 100,
-            ExpressionEnum::Array(_) => 200,
-            ExpressionEnum::VariableExtract(_, _) => 100,
-            ExpressionEnum::FunctionCall(_, _) => 100,
-            _ => 100,
-        }
-    }
-
-        pub fn is_binary(&self) -> bool {
-        if let ExpressionEnum::Binary(_, _, _) = self {
-            return true;
-        }
-        return false;
-    }
-
-    pub fn binary_get_left(&self) -> &Option<Box<Expression>> {
-        if let ExpressionEnum::Binary(l, _, _) = self {
-            return l;
-        }
-        panic!()
-    }
-
-    pub fn binary_get_right(&self) -> &Option<Box<Expression>> {
-        if let ExpressionEnum::Binary(_, r, _) = self {
-            return r;
-        }
-        panic!()
-    }
-
-    pub fn binary_set_left(self, expr: Option<ExpressionEnum>) -> ExpressionEnum {
-        let front = self;
-        let ExpressionEnum::Binary(_, r, t) = front else {
-            panic!("Critical Expression Parsing Error");
-        };
-
-        let new_expression = ExpressionEnum::Binary(expr.map(|v| Box::new(v.into())), r, t);
-
-        new_expression
-    }
-
-    pub fn binary_set_right(self, expr: Option<ExpressionEnum>) -> ExpressionEnum {
-        let front = self;
-        let ExpressionEnum::Binary(l, _, t) = front else {
-            panic!("Critical Expression Parsing Error");
-        };
-
-        let new_expression = ExpressionEnum::Binary(l, expr.map(|v| Box::new(v.into())), t);
-
-        new_expression
-    }
 }

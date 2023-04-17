@@ -1,5 +1,6 @@
 mod datatype;
 mod expression;
+mod expression_builder;
 mod function;
 mod ifcondition;
 mod insertvariable;
@@ -12,6 +13,7 @@ mod variable;
 mod whileloop;
 
 pub use whileloop::*;
+pub use expression_builder::*;
 pub use datatype::*;
 pub use expression::*;
 pub use function::*;
