@@ -24,178 +24,165 @@ impl Borrow<ExpressionEnum> for Expression {
 
 impl Statement for Expression {
     fn visit<'a>(&'a self, data: &'a Compiler) -> Option<Box<dyn AnyValue + 'a>> {
-        if let ExpressionEnum::Binary(left, right, binary_type) = &self.expression_enum {
-            let parsed_left = left.as_ref().unwrap().visit(data)?.as_any_value_enum();
-            let parsed_right = right.as_ref().unwrap().visit(data)?.as_any_value_enum();
-            return Some(Self::binary_statement(
-                data,
-                binary_type,
-                parsed_left,
-                parsed_right,
-            ));
-        }
-
-        if let ExpressionEnum::Unary(Some(interior), operation) = &self.expression_enum {
-            return match operation {
-                UnaryExpressionType::Reference => {
-                    Some(Box::new(interior.expression_location(data).unwrap()))
-                }
-                UnaryExpressionType::Dereference => {
-                    let location = interior
-                        .visit(data)
-                        .unwrap()
-                        .as_any_value_enum()
-                        .into_pointer_value();
-                    Some(Box::new(data.builder.build_load(location, "__tmp__")))
+        match &self.expression_enum {
+            ExpressionEnum::Binary(left, right, binary_type) => {
+                let parsed_left = left.as_ref().unwrap().visit(data)?.as_any_value_enum();
+                let parsed_right = right.as_ref().unwrap().visit(data)?.as_any_value_enum();
+                return Some(Self::binary_statement(
+                    data,
+                    binary_type,
+                    parsed_left,
+                    parsed_right,
+                ));
+            }
+            ExpressionEnum::Unary(Some(interior), operation) => {
+                return match operation {
+                    UnaryExpressionType::Reference => {
+                        Some(Box::new(interior.expression_location(data).unwrap()))
+                    }
+                    UnaryExpressionType::Dereference => {
+                        let location = interior
+                            .visit(data)
+                            .unwrap()
+                            .as_any_value_enum()
+                            .into_pointer_value();
+                        Some(Box::new(data.builder.build_load(location, "__tmp__")))
+                    }
                 }
             }
-        };
+            ExpressionEnum::VariableRead(variable_name) => {
+                return if let Some(param) = data.current_function_params.borrow().get(variable_name) {
+                    Some(Box::new(param.as_basic_value_enum()))
+                } else {
+                    let load = data
+                        .builder
+                        .build_load(self.expression_location(data).unwrap(), variable_name);
+                    Some(Box::new(load))
+                }
+            }
+            ExpressionEnum::IntegerLiteral(ref literal) => {
+                let t = data.context.i64_type();
+                let value = t.const_int(literal.abs() as u64, true);
 
-        if let ExpressionEnum::VariableRead(variable_name) = &self.expression_enum {
-            return if let Some(param) = data.current_function_params.borrow().get(variable_name) {
-                Some(Box::new(param.as_basic_value_enum()))
-            } else {
-                let load = data
+                return Some(Box::new(value));
+            }
+            ExpressionEnum::FloatLiteral(ref literal) => {
+                let t = data.context.f64_type();
+                let value = t.const_float(*literal);
+
+                return Some(Box::new(value));
+            }
+            ExpressionEnum::StringLiteral(ref str) => {
+                let bytes: Vec<_> = str
+                    .as_bytes()
+                    .iter()
+                    .map(|v| data.context.i8_type().const_int(*v as u64, false))
+                    .collect();
+                // bytes.push(data.context.i8_type().const_zero());
+                let array = data.context.i8_type().const_array(&bytes);
+
+                return Some(Box::new(array));
+            }
+            ExpressionEnum::CharLiteral(c) => {
+                let value = data.context.i8_type().const_int(*c as u64, false);
+
+                return Some(Box::new(value));
+            }
+            ExpressionEnum::StructLiteral(_) => {
+                let data_type = self.data_type.as_ref().unwrap();
+                let t = data_type.produce_llvm_type(data.context).as_basic_type_enum();
+                return Some(Box::new(t.const_zero()))
+            }
+            ExpressionEnum::Array(ref values) => {
+                let expressions: Vec<Box<dyn AnyValue>> =
+                    values.iter().map(|v| v.visit(data)).flatten().collect();
+                if expressions.is_empty() {
+                    return None;
+                }
+                let array_value_result: ArrayValue = match expressions[0].as_any_value_enum() {
+                    AnyValueEnum::ArrayValue(ref v) => {
+                        let mapped: Vec<ArrayValue> = expressions
+                            .iter()
+                            .map(|v| v.as_any_value_enum().into_array_value())
+                            .collect();
+                        let value = v.get_type().const_array(mapped.as_slice());
+                        value
+                    }
+                    AnyValueEnum::IntValue(ref v) => {
+                        let mapped: Vec<IntValue> = expressions
+                            .iter()
+                            .map(|v| v.as_any_value_enum().into_int_value())
+                            .collect();
+                        let value = v.get_type().const_array(mapped.as_slice());
+                        value
+                    }
+                    AnyValueEnum::FloatValue(ref v) => {
+                        let mapped: Vec<FloatValue> = expressions
+                            .iter()
+                            .map(|v| v.as_any_value_enum().into_float_value())
+                            .collect();
+                        let value = v.get_type().const_array(mapped.as_slice());
+                        value
+                    }
+                    AnyValueEnum::PhiValue(_) => todo!(),
+                    AnyValueEnum::FunctionValue(_) => todo!(),
+                    AnyValueEnum::PointerValue(ref v) => {
+                        let mapped: Vec<PointerValue> = expressions
+                            .iter()
+                            .map(|v| v.as_any_value_enum().into_pointer_value())
+                            .collect();
+                        let value = v.get_type().const_array(mapped.as_slice());
+                        value
+                    }
+                    AnyValueEnum::StructValue(ref v) => {
+                        let mapped: Vec<StructValue> = expressions
+                            .iter()
+                            .map(|v| v.as_any_value_enum().into_struct_value())
+                            .collect();
+                        let value = v.get_type().const_array(mapped.as_slice());
+                        value
+                    }
+                    _ => panic!("Unexpected type")
+                };
+                return Some(Box::new(array_value_result));
+            }
+            ExpressionEnum::VariableExtract(_, _) => {
+                let location = self.expression_location(data).unwrap();
+
+                return Some(Box::new(data.builder.build_load(location, "__tmp__")));
+            }
+            ExpressionEnum::VariableNamedExtract(location, _) => {
+                let location = self.expression_location(data).or_else(|| self.allocate_and_store(data, location))?;
+                // dbg!(&data.current_function_params, &self.data_type);
+                let dt = self.data_type.as_ref()?.produce_llvm_type(data.context).as_basic_type_enum();
+                let adjusted_location = data.builder.build_pointer_cast(location, dt.ptr_type(AddressSpace::default()), "__tmp__");
+
+                return Some(Box::new(data.builder.build_load(adjusted_location, "__tmp__")));
+            }
+            ExpressionEnum::FunctionCall(name, args) => {
+                let function = data.function_table.borrow()[name];
+                let params: Vec<BasicValueEnum> = args
+                    .iter()
+                    .map(|v| {
+                        v.visit(data)
+                            .unwrap()
+                            .as_any_value_enum()
+                            .try_into()
+                            .unwrap()
+                    })
+                    .collect();
+                let mapped: Vec<BasicMetadataValueEnum> = params.iter().map(|v| (*v).into()).collect();
+                let call_output = data
                     .builder
-                    .build_load(self.expression_location(data).unwrap(), variable_name);
-                Some(Box::new(load))
+                    .build_call(function, &mapped, "__tmp__")
+                    .try_as_basic_value();
+                if let Some(call_value) = call_output.left() {
+                    let as_any = call_value.as_any_value_enum();
+                    return Some(Box::new(as_any));
+                }
             }
-        }
-
-        if let ExpressionEnum::IntegerLiteral(ref literal) = &self.expression_enum {
-            let t = data.context.i64_type();
-            let value = t.const_int(literal.abs() as u64, true);
-
-            return Some(Box::new(value));
-        }
-
-        if let ExpressionEnum::FloatLiteral(ref literal) = &self.expression_enum {
-            let t = data.context.f64_type();
-            let value = t.const_float(*literal);
-
-            return Some(Box::new(value));
-        }
-
-        if let ExpressionEnum::StringLiteral(ref str) = &self.expression_enum {
-            let mut bytes: Vec<_> = str
-                .as_bytes()
-                .iter()
-                .map(|v| data.context.i8_type().const_int(*v as u64, false))
-                .collect();
-            // bytes.push(data.context.i8_type().const_zero());
-            let array = data.context.i8_type().const_array(&bytes);
-
-            return Some(Box::new(array));
-        }
-
-        if let ExpressionEnum::CharLiteral(c) = &self.expression_enum {
-            let value = data.context.i8_type().const_int(*c as u64, false);
-
-            return Some(Box::new(value));
-        }
-
-        if let ExpressionEnum::StructLiteral(_) = &self.expression_enum {
-            let data_type = self.data_type.as_ref().unwrap();
-            let t = data_type.produce_llvm_type(data.context).as_basic_type_enum();
-            return Some(Box::new(t.const_zero()))
-        }
-
-        if let ExpressionEnum::Array(ref values) = &self.expression_enum {
-            let expressions: Vec<Box<dyn AnyValue>> =
-                values.iter().map(|v| v.visit(data)).flatten().collect();
-            if expressions.is_empty() {
-                return None;
-            }
-            let thing: ArrayValue = match expressions[0].as_any_value_enum() {
-                AnyValueEnum::ArrayValue(ref v) => {
-                    let mapped: Vec<ArrayValue> = expressions
-                        .iter()
-                        .map(|v| v.as_any_value_enum().into_array_value())
-                        .collect();
-                    let value = v.get_type().const_array(mapped.as_slice());
-                    value
-                }
-                AnyValueEnum::IntValue(ref v) => {
-                    let mapped: Vec<IntValue> = expressions
-                        .iter()
-                        .map(|v| v.as_any_value_enum().into_int_value())
-                        .collect();
-                    let value = v.get_type().const_array(mapped.as_slice());
-                    value
-                }
-                AnyValueEnum::FloatValue(ref v) => {
-                    let mapped: Vec<FloatValue> = expressions
-                        .iter()
-                        .map(|v| v.as_any_value_enum().into_float_value())
-                        .collect();
-                    let value = v.get_type().const_array(mapped.as_slice());
-                    value
-                }
-                AnyValueEnum::PhiValue(_) => todo!(),
-                AnyValueEnum::FunctionValue(_) => todo!(),
-                AnyValueEnum::PointerValue(ref v) => {
-                    let mapped: Vec<PointerValue> = expressions
-                        .iter()
-                        .map(|v| v.as_any_value_enum().into_pointer_value())
-                        .collect();
-                    let value = v.get_type().const_array(mapped.as_slice());
-                    value
-                }
-                AnyValueEnum::StructValue(ref v) => {
-                    let mapped: Vec<StructValue> = expressions
-                        .iter()
-                        .map(|v| v.as_any_value_enum().into_struct_value())
-                        .collect();
-                    let value = v.get_type().const_array(mapped.as_slice());
-                    value
-                }
-                AnyValueEnum::VectorValue(ref v) => todo!(),
-                AnyValueEnum::InstructionValue(_) => todo!(),
-                AnyValueEnum::MetadataValue(_) => todo!(),
-            };
-            return Some(Box::new(thing));
-        }
-
-        if let ExpressionEnum::VariableExtract(_, _) = &self.expression_enum {
-            let location = self.expression_location(data).unwrap();
-
-            return Some(Box::new(data.builder.build_load(location, "__tmp__")));
-        }
-
-        if let ExpressionEnum::VariableNamedExtract(location, _) = &self.expression_enum {
-            let location = self.expression_location(data).or_else(|| self.allocate_and_store(data, location))?;
-            // dbg!(&data.current_function_params, &self.data_type);
-            let dt = self.data_type.as_ref()?.produce_llvm_type(data.context).as_basic_type_enum();
-            let adjusted_location = data.builder.build_pointer_cast(location, dt.ptr_type(AddressSpace::default()), "__tmp__");
-
-            return Some(Box::new(data.builder.build_load(adjusted_location, "__tmp__")));
-        }
-
-        if let ExpressionEnum::FunctionCall(name, args) = &self.expression_enum {
-            let function = data.function_table.borrow()[name];
-            let params: Vec<BasicValueEnum> = args
-                .iter()
-                .map(|v| {
-                    v.visit(data)
-                        .unwrap()
-                        .as_any_value_enum()
-                        .try_into()
-                        .unwrap()
-                })
-                .collect();
-            let mapped: Vec<BasicMetadataValueEnum> = params.iter().map(|v| (*v).into()).collect();
-            let call_output = data
-                .builder
-                .build_call(function, &mapped, "__tmp__")
-                .try_as_basic_value();
-            if let Some(call_value) = call_output.left() {
-                let as_any = call_value.as_any_value_enum();
-                return Some(Box::new(as_any));
-            }
-        }
-
-        if let ExpressionEnum::ExpressionCast(_, _) = &self.expression_enum {
-            return self.visit_cast(data);
+            ExpressionEnum::ExpressionCast(_, _) => return self.visit_cast(data),
+            _ => (),
         }
         None
     }
@@ -257,72 +244,70 @@ impl Expression {
     }
 
     pub fn expression_location<'a>(&'a self, data: &'a Compiler) -> Option<PointerValue<'a>> {
-        if let ExpressionEnum::VariableExtract(ref location, ref slot) = self.expression_enum {
+        match self.expression_enum {
+            ExpressionEnum::VariableExtract(ref location, ref slot) => {
 
-            // let ptr = data.variable_table.borrow()[name];
-            let mut ptr: PointerValue = location.expression_location(data)?;
-            let slot_value = slot
-                .visit(data)
-                .unwrap()
-                .as_any_value_enum()
-                .into_int_value();
-            unsafe {
-                let zero = data.context.i64_type().const_zero();
-                let indices: Vec<IntValue> = match location.data_type {
-                    Some(ref v) => {
-                        match v.value {
-                            DataTypeEnum::Array(_,_) => vec![zero, slot_value],
-                            DataTypeEnum::Pointer(_) => {
-                                ptr = data.builder.build_load(ptr, "__tmp__").into_pointer_value();
-                                vec![slot_value]
-                            },
-                            _ => vec![slot_value],
-                        }
-                    },
-                    None => vec![slot_value],
-                };
-                let new_location = data.builder.build_gep(
-                    ptr,
-                    &indices,
-                    "__tmp__",
-                );
+                // let ptr = data.variable_table.borrow()[name];
+                let mut ptr: PointerValue = location.expression_location(data)?;
+                let slot_value = slot
+                    .visit(data)
+                    .unwrap()
+                    .as_any_value_enum()
+                    .into_int_value();
+                unsafe {
+                    let zero = data.context.i64_type().const_zero();
+                    let indices: Vec<IntValue> = match location.data_type {
+                        Some(ref v) => {
+                            match v.value {
+                                DataTypeEnum::Array(_,_) => vec![zero, slot_value],
+                                DataTypeEnum::Pointer(_) => {
+                                    ptr = data.builder.build_load(ptr, "__tmp__").into_pointer_value();
+                                    vec![slot_value]
+                                },
+                                _ => vec![slot_value],
+                            }
+                        },
+                        None => vec![slot_value],
+                    };
+                    let new_location = data.builder.build_gep(
+                        ptr,
+                        &indices,
+                        "__tmp__",
+                    );
 
-                return Some(new_location);
+                    return Some(new_location);
+                }
             }
-        }
+            ExpressionEnum::VariableNamedExtract(ref location, ref name) => {
+                let dt = location.data_type.clone()?;
+                let location = location.expression_location(data)?;
 
-        if let ExpressionEnum::VariableNamedExtract(ref location, ref name) = self.expression_enum {
-            let dt = location.data_type.clone()?;
-            let location = location.expression_location(data)?;
-
-            if let DataTypeEnum::Struct(_, name_map) = &dt.value {
-                return Some(
-                    data.builder.build_struct_gep(location, name_map[name] as u32, "__tmp__").unwrap()
-                );
+                if let DataTypeEnum::Struct(_, name_map) = &dt.value {
+                    return Some(
+                        data.builder.build_struct_gep(location, name_map[name] as u32, "__tmp__").unwrap()
+                    );
+                }
             }
-        }
-
-        if let ExpressionEnum::VariableRead(ref variable_name) = self.expression_enum {
-            if let Some(p) = data.current_function_params.borrow().get(variable_name) {
-                return Some(p.into_pointer_value());
+            ExpressionEnum::VariableRead(ref variable_name) => {
+                if let Some(p) = data.current_function_params.borrow().get(variable_name) {
+                    return Some(p.into_pointer_value());
+                }
+                let ptr = data.variable_table.borrow()[variable_name];
+                return Some(ptr);
             }
-            let ptr = data.variable_table.borrow()[variable_name];
-            return Some(ptr);
-        }
+            ExpressionEnum::Unary(Some(ref interior), UnaryExpressionType::Dereference) => {
+                let dereference = data
+                    .builder
+                    .build_load(interior.expression_location(data)?, "__tmp__");
+                if dereference.is_pointer_value() {
+                    let as_ptr_type = dereference.into_pointer_value();
 
-        if let ExpressionEnum::Unary(Some(ref interior), UnaryExpressionType::Dereference) =
-            self.expression_enum
-        {
-            let dereference = data
-                .builder
-                .build_load(interior.expression_location(data)?, "__tmp__");
-            if dereference.is_pointer_value() {
-                let as_ptr_type = dereference.into_pointer_value();
-
-                return Some(as_ptr_type);
-            } else {
-                return interior.expression_location(data);
+                    return Some(as_ptr_type);
+                } else {
+                    return interior.expression_location(data);
+                }
             }
+            _ => (),
         }
 
         None
@@ -334,75 +319,73 @@ impl Expression {
         parsed_left: AnyValueEnum<'a>,
         parsed_right: AnyValueEnum<'a>,
     ) -> Box<AnyValueEnum<'a>> {
-        if let (AnyValueEnum::IntValue(int_left), AnyValueEnum::IntValue(int_right)) =
-            (parsed_left, parsed_right)
-        {
-            let value = match binary_type {
-                BinaryExpressionType::Addition => {
-                    data.builder.build_int_add(int_left, int_right, "__tmp__")
-                }
-                BinaryExpressionType::Subtraction => {
-                    data.builder.build_int_sub(int_left, int_right, "__tmp__")
-                }
-                BinaryExpressionType::Multiplication => {
-                    data.builder.build_int_mul(int_left, int_right, "__tmp__")
-                }
-                BinaryExpressionType::Division => data
-                    .builder
-                    .build_int_signed_div(int_left, int_right, "__tmp__"),
-                _ => {
-                    let predicate = match binary_type {
-                        BinaryExpressionType::Equal => IntPredicate::EQ,
-                        BinaryExpressionType::NotEqual => IntPredicate::NE,
-                        BinaryExpressionType::Less => IntPredicate::SLT,
-                        BinaryExpressionType::LessEqual => IntPredicate::SLE,
-                        BinaryExpressionType::Greater => IntPredicate::SGE,
-                        BinaryExpressionType::GreaterEqual => IntPredicate::SGT,
-                        _ => unreachable!(),
-                    };
-                    data.builder
-                        .build_int_compare(predicate, int_left, int_right, "__tmp__")
-                }
-            };
-
-            return Box::new(value.as_any_value_enum());
-        }
-        if let (AnyValueEnum::FloatValue(int_left), AnyValueEnum::FloatValue(int_right)) =
-            (parsed_left, parsed_right)
-        {
-            let value: Box<dyn AnyValue> = match binary_type {
-                BinaryExpressionType::Addition => {
-                    Box::new(data.builder.build_float_add(int_left, int_right, "__tmp__"))
-                }
-                BinaryExpressionType::Subtraction => {
-                    Box::new(data.builder.build_float_sub(int_left, int_right, "__tmp__"))
-                }
-                BinaryExpressionType::Multiplication => {
-                    Box::new(data.builder.build_float_mul(int_left, int_right, "__tmp__"))
-                }
-                BinaryExpressionType::Division => {
-                    Box::new(data.builder.build_float_div(int_left, int_right, "__tmp__"))
-                }
-                _ => {
-                    let predicate = match binary_type {
-                        BinaryExpressionType::Equal => FloatPredicate::OEQ,
-                        BinaryExpressionType::NotEqual => FloatPredicate::ONE,
-                        BinaryExpressionType::Less => FloatPredicate::OLT,
-                        BinaryExpressionType::LessEqual => FloatPredicate::OLE,
-                        BinaryExpressionType::Greater => FloatPredicate::OGE,
-                        BinaryExpressionType::GreaterEqual => FloatPredicate::OGT,
-                        _ => unreachable!(),
-                    };
-                    Box::new(
+        match (parsed_left, parsed_right) {
+            (AnyValueEnum::IntValue(int_left), AnyValueEnum::IntValue(int_right)) => {
+                let value = match binary_type {
+                    BinaryExpressionType::Addition => {
+                        data.builder.build_int_add(int_left, int_right, "__tmp__")
+                    }
+                    BinaryExpressionType::Subtraction => {
+                        data.builder.build_int_sub(int_left, int_right, "__tmp__")
+                    }
+                    BinaryExpressionType::Multiplication => {
+                        data.builder.build_int_mul(int_left, int_right, "__tmp__")
+                    }
+                    BinaryExpressionType::Division => data
+                        .builder
+                        .build_int_signed_div(int_left, int_right, "__tmp__"),
+                    _ => {
+                        let predicate = match binary_type {
+                            BinaryExpressionType::Equal => IntPredicate::EQ,
+                            BinaryExpressionType::NotEqual => IntPredicate::NE,
+                            BinaryExpressionType::Less => IntPredicate::SLT,
+                            BinaryExpressionType::LessEqual => IntPredicate::SLE,
+                            BinaryExpressionType::Greater => IntPredicate::SGE,
+                            BinaryExpressionType::GreaterEqual => IntPredicate::SGT,
+                            _ => unreachable!(),
+                        };
                         data.builder
-                            .build_float_compare(predicate, int_left, int_right, "__tmp__"),
-                    )
-                }
-            };
+                            .build_int_compare(predicate, int_left, int_right, "__tmp__")
+                    }
+                };
 
-            return Box::new(value.as_any_value_enum());
+                return Box::new(value.as_any_value_enum());
+            }
+            (AnyValueEnum::FloatValue(int_left), AnyValueEnum::FloatValue(int_right)) => {
+                let value: Box<dyn AnyValue> = match binary_type {
+                    BinaryExpressionType::Addition => {
+                        Box::new(data.builder.build_float_add(int_left, int_right, "__tmp__"))
+                    }
+                    BinaryExpressionType::Subtraction => {
+                        Box::new(data.builder.build_float_sub(int_left, int_right, "__tmp__"))
+                    }
+                    BinaryExpressionType::Multiplication => {
+                        Box::new(data.builder.build_float_mul(int_left, int_right, "__tmp__"))
+                    }
+                    BinaryExpressionType::Division => {
+                        Box::new(data.builder.build_float_div(int_left, int_right, "__tmp__"))
+                    }
+                    _ => {
+                        let predicate = match binary_type {
+                            BinaryExpressionType::Equal => FloatPredicate::OEQ,
+                            BinaryExpressionType::NotEqual => FloatPredicate::ONE,
+                            BinaryExpressionType::Less => FloatPredicate::OLT,
+                            BinaryExpressionType::LessEqual => FloatPredicate::OLE,
+                            BinaryExpressionType::Greater => FloatPredicate::OGE,
+                            BinaryExpressionType::GreaterEqual => FloatPredicate::OGT,
+                            _ => unreachable!(),
+                        };
+                        Box::new(
+                            data.builder
+                                .build_float_compare(predicate, int_left, int_right, "__tmp__"),
+                        )
+                    }
+                };
+
+                return Box::new(value.as_any_value_enum());
+            }
+            _ => (),
         }
-        dbg!(&parsed_left, &parsed_right);
         unimplemented!()
     }
 
@@ -506,7 +489,6 @@ impl Expression {
             return Some(data_type);
         }
 
-        if let ExpressionEnum::FunctionCall(_, _) = self.expression_enum {}
         None
     }
 
