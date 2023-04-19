@@ -4,14 +4,26 @@ use crate::ast::{Expression, Statement, DataTypeEnum};
 
 use super::ExpressionStatement;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct VariableExtractExpression {
     pub location: Box<Expression>,
     pub slot: Box<Expression>,
 }
 
+impl VariableExtractExpression {
+    pub fn new(location: Box<Expression>, slot: Box<Expression>) -> Self {
+        Self {
+            location,
+            slot,
+        }
+    }
+}
+
 impl Statement for VariableExtractExpression {
     fn visit<'a>(&'a self, data: &'a crate::ast::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        todo!()
+        let location = self.expression_location(data).unwrap();
+
+        return Some(Box::new(data.builder.build_load(location, "__tmp__")));
     }
 }
 

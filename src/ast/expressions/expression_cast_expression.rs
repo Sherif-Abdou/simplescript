@@ -5,21 +5,28 @@ use crate::ast::{Expression, Statement, ExpressionEnum};
 use super::ExpressionStatement;
 
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct ExpressionCastExpression {
     pub expression: Box<Expression>,
     pub cast_type: String,
 }
 
+impl ExpressionCastExpression {
+    pub fn new(expression: Box<Expression>, cast_type: String) -> Self {
+        Self {
+            expression,
+            cast_type,
+        }
+    }
+}
+
 impl Statement for ExpressionCastExpression {
     fn visit<'a>(&'a self, data: &'a crate::ast::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        let ExpressionEnum::ExpressionCast(interior, resultant) = &self.expression.expression_enum else {
-            return None;
-        };
-        let compiled = interior.visit(data)?.as_any_value_enum();
+        let compiled = self.expression.visit(data)?.as_any_value_enum();
         if compiled.is_int_value() {
             let integer = compiled.into_int_value();
 
-            let result: Box<dyn AnyValue> = match resultant.as_str() {
+            let result: Box<dyn AnyValue> = match self.cast_type.as_str() {
                 "f64" => Box::new(data.builder.build_signed_int_to_float(
                     integer,
                     data.context.f64_type(),
@@ -40,7 +47,7 @@ impl Statement for ExpressionCastExpression {
 
             return Some(result);
         }
-        if compiled.is_pointer_value() && resultant.starts_with('&') {
+        if compiled.is_pointer_value() && self.cast_type.starts_with('&') {
             let element_type = compiled.into_array_value().get_type().get_element_type();
             let pointer_type = element_type.ptr_type(AddressSpace::default());
             let basic_value: BasicValueEnum = compiled.try_into().unwrap();

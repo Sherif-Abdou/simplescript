@@ -2,16 +2,26 @@ use inkwell::{AddressSpace, values::PointerValue};
 use inkwell::types::BasicType;
 use inkwell::values::BasicValueEnum;
 
-use crate::ast::{Expression, Statement, DataTypeEnum, Compiler};
+use crate::ast::{Expression, Statement, DataTypeEnum, Compiler, DataType};
 
 use super::ExpressionStatement;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct VariableNamedExtractExpression {
     pub location: Box<Expression>,
     pub named_location: String,
+    data_type: Option<DataType>,
 }
 
 impl VariableNamedExtractExpression {
+    pub fn new(location: Expression, named_location: String) -> Self {
+        Self {
+            location: Box::new(location),
+            named_location,
+            data_type: None,
+        }
+    }
+
     fn allocate_and_store<'a>(&'a self, data: &'a Compiler, expression: &Expression) -> Option<PointerValue<'a>> {
         let produced_type = expression.data_type.as_ref();
         let dt = produced_type?.produce_llvm_type(data.context).as_basic_type_enum();
@@ -35,6 +45,14 @@ impl Statement for VariableNamedExtractExpression {
 }
 
 impl ExpressionStatement for VariableNamedExtractExpression {
+    fn get_data_type(&self) -> Option<&crate::ast::DataType> {
+        self.data_type.as_ref()
+    }
+
+    fn set_data_type(&mut self, data_type: DataType) {
+        self.data_type = Some(data_type);
+    }
+
     fn attach_data_types(&mut self, scope: &dyn crate::ast::Scope, data_types: &std::collections::HashMap<String, crate::ast::DataType>) {
         self.location.attach_data_types(scope, data_types);
     }

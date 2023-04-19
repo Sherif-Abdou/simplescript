@@ -6,10 +6,21 @@ use crate::ast::{BinaryExpressionType, Statement, Compiler};
 use super::super::Expression;
 use super::ExpressionStatement;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct BinaryExpression {
     left: Option<Box<Expression>>,
     right: Option<Box<Expression>>,
     binary_type: BinaryExpressionType
+}
+
+impl BinaryExpression {
+    pub fn new(left: Option<Box<Expression>>, right: Option<Box<Expression>>, binary_type: BinaryExpressionType) -> Self {
+        Self {
+            left,
+            right,
+            binary_type
+        }
+    }
 }
 
 impl BinaryExpression {
@@ -92,6 +103,12 @@ impl BinaryExpression {
 
 impl ExpressionStatement for BinaryExpression {
     fn attach_data_types(&mut self, scope: &dyn crate::ast::Scope, data_types: &std::collections::HashMap<String, crate::ast::DataType>) {
+        if let Some(ref mut left) = self.left {
+            left.attach_data_types(scope, data_types);
+        }
+        if let Some(ref mut right) = self.right {
+            right.attach_data_types(scope, data_types);
+        }
     }
 
     fn expression_location<'a>(&'a self, data: &'a crate::ast::Compiler) -> Option<inkwell::values::PointerValue<'a>> {

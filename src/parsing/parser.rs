@@ -119,7 +119,7 @@ impl Parser {
                     if self.current_token() == Token::Equal {
                         if let ExpressionEnum::VariableRead(ref iden) = expression.borrow() {
 //                            dbg!("Set variable");
-                            self.parse_set_variable(iden)?;
+                            self.parse_set_variable(&iden.name)?;
                         } else {
                             self.parse_insert_value(expression)?;
                         }

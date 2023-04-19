@@ -2,8 +2,15 @@ use crate::ast::Statement;
 
 use super::ExpressionStatement;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct FloatExpression {
     pub value: f64,
+}
+
+impl FloatExpression {
+    pub fn new(value: f64) -> Self {
+        Self { value }
+    }
 }
 
 impl Statement for FloatExpression {

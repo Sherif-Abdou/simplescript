@@ -4,9 +4,19 @@ use crate::ast::{Expression, Statement};
 
 use super::ExpressionStatement;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct FunctionCallExpression {
     pub name: String,
     pub arguments: Vec<Expression>
+}
+
+impl FunctionCallExpression {
+    pub fn new(name: String, arguments: Vec<Expression>) -> Self {
+        Self {
+            name,
+            arguments,
+        }
+    }
 }
 
 impl Statement for FunctionCallExpression {

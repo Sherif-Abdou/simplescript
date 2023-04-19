@@ -11,6 +11,7 @@ mod integer_expression;
 mod float_expression;
 mod char_expression;
 mod string_expression;
+mod struct_expression;
 
 pub use expression_statement::*;
 pub use binary_expression::*;
@@ -22,4 +23,8 @@ pub use variable_extract_expression::*;
 pub use variable_named_extract_expression::*;
 pub use expression_cast_expression::*;
 pub use integer_expression::*;
+pub use float_expression::*;
+pub use string_expression::*;
+pub use char_expression::*;
+pub use struct_expression::*;
 

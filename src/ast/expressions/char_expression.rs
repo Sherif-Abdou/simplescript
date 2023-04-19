@@ -2,8 +2,15 @@ use crate::ast::Statement;
 
 use super::ExpressionStatement;
 
-struct CharExpression {
+#[derive(Clone, PartialEq, Debug)]
+pub struct CharExpression {
     value: u8,
+}
+
+impl CharExpression {
+    pub fn new(value: u8) -> Self {
+        Self { value }
+    }
 }
 
 impl Statement for CharExpression {

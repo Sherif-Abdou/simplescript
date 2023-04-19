@@ -2,8 +2,15 @@ use crate::ast::Statement;
 
 use super::ExpressionStatement;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct StringExpression {
     pub value: String,
+}
+
+impl StringExpression {
+    pub fn new(value: String) -> Self {
+        Self { value }
+    }
 }
 
 impl Statement for StringExpression {

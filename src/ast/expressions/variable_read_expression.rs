@@ -4,8 +4,17 @@ use crate::ast::Statement;
 
 use super::ExpressionStatement;
 
-struct VariableReadExpression {
+#[derive(Clone, PartialEq, Debug)]
+pub struct VariableReadExpression {
     pub name: String
+}
+
+impl VariableReadExpression {
+    pub fn new(name: String) -> Self {
+        Self {
+            name
+        }
+    }
 }
 
 impl Statement for VariableReadExpression {

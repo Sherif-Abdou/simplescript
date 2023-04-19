@@ -4,8 +4,15 @@ use crate::ast::{Expression, Statement};
 
 use super::ExpressionStatement;
 
-struct ArrayExpression {
+#[derive(Clone, PartialEq, Debug)]
+pub struct ArrayExpression {
     pub values: Vec<Expression>,
+}
+
+impl ArrayExpression {
+    pub fn new(values: Vec<Expression>) -> Self {
+        Self { values }
+    }
 }
 
 impl Statement for ArrayExpression {

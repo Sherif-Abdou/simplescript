@@ -2,8 +2,15 @@ use crate::ast::Statement;
 
 use super::ExpressionStatement;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct IntegerExpression {
     pub value: i64,
+}
+
+impl IntegerExpression {
+    pub fn new(value: i64) -> Self {
+        Self { value }
+    }
 }
 
 impl Statement for IntegerExpression {
