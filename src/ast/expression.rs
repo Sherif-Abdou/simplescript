@@ -8,17 +8,32 @@ use std::{borrow::Borrow, panic::Location};
 use std::collections::HashMap;
 use inkwell::types::BasicType;
 
+use super::expressions::ExpressionStatement;
 use super::{statement::Statement, Compiler, DataTypeEnum, Scope};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Expression {
-    expression_enum: ExpressionEnum,
-    data_type: Option<DataType>,
+    pub expression_enum: ExpressionEnum,
+    pub data_type: Option<DataType>,
 }
 
 impl Borrow<ExpressionEnum> for Expression {
     fn borrow(&self) -> &ExpressionEnum {
         &self.expression_enum
+    }
+}
+
+impl ExpressionStatement for Expression {
+    fn attach_data_types(&mut self, scope: &dyn Scope, data_types: &HashMap<String, DataType>) {
+        Self::attach_data_types(self, scope, data_types)
+    }
+
+    fn expression_location<'a>(&'a self, data: &'a Compiler) -> Option<PointerValue<'a>> {
+        Self::expression_location(self, data)
+    }
+
+    fn data_type(&self, scope: &dyn Scope, data_types: &HashMap<String, DataType>) -> Option<String> {
+        Self::data_type(self, scope, data_types)
     }
 }
 

@@ -11,6 +11,7 @@ mod setvariable;
 mod statement;
 mod variable;
 mod whileloop;
+mod expressions;
 
 pub use whileloop::*;
 pub use expression_builder::*;
