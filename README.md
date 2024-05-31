@@ -7,12 +7,14 @@ This is a simple programming language I made that is similar to C but with more 
 
 ## Examples
 ### Hello world
+There's still currently fixes needed on c string literals, but this works so far
 ```
 extern def puts(str: &char): i64
 
 
 def main(): i64 {
-    puts("Hello world\n")
+    s = "Hello world\n\0"
+    puts(&s)
 
     return 0
 }
