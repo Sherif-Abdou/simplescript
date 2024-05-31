@@ -22,7 +22,7 @@ impl Statement for InsertVariable {
             .unwrap();
         // dbg!(&self.location);
         let ptr = self.location.expression_location(data).unwrap();
-        let stored = data.builder.build_store(ptr, to_be_stored);
+        let stored = data.builder.build_store(ptr, to_be_stored).unwrap();
         Some(Box::new(stored))
     }
 }

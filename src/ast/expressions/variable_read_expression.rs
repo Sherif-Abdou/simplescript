@@ -25,7 +25,7 @@ impl Statement for VariableReadExpression {
             let load = data
                 .builder
                 .build_load(self.expression_location(data).unwrap(), &self.name);
-            Some(Box::new(load))
+            Some(Box::new(load.unwrap()))
         }
     }
 }

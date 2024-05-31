@@ -11,7 +11,7 @@ pub fn run(file: String) {
     let context = Context::create();
     let module = context.create_module("main");
     let engine = module
-        .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+        .create_jit_execution_engine(inkwell::OptimizationLevel::Aggressive)
         .unwrap();
 
     let mut parser = Parser::new(file);

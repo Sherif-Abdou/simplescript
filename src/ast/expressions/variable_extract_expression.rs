@@ -23,7 +23,7 @@ impl Statement for VariableExtractExpression {
     fn visit<'a>(&'a self, data: &'a crate::ast::Compiler) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
         let location = self.expression_location(data).unwrap();
 
-        return Some(Box::new(data.builder.build_load(location, "__tmp__")));
+        return Some(Box::new(data.builder.build_load(location, "__tmp__").unwrap()));
     }
 }
 
@@ -43,7 +43,7 @@ impl ExpressionStatement for VariableExtractExpression {
                     match v.value {
                         DataTypeEnum::Array(_,_) => vec![zero, slot_value],
                         DataTypeEnum::Pointer(_) => {
-                            ptr = data.builder.build_load(ptr, "__tmp__").into_pointer_value();
+                            ptr = data.builder.build_load(ptr, "__tmp__").unwrap().into_pointer_value();
                             vec![slot_value]
                         },
                         _ => vec![slot_value],
@@ -57,7 +57,7 @@ impl ExpressionStatement for VariableExtractExpression {
                 "__tmp__",
             );
 
-            return Some(new_location);
+            return Some(new_location.unwrap());
         }
     }
 

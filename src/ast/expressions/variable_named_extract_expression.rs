@@ -29,9 +29,9 @@ impl VariableNamedExtractExpression {
 
         let visited: BasicValueEnum = expression.visit(data).unwrap().as_any_value_enum().try_into().unwrap();
 
-        data.builder.build_store(allocated_space, visited);
+        data.builder.build_store(allocated_space.as_ref().unwrap().clone(), visited);
 
-        Some(allocated_space)
+        Some(allocated_space.unwrap())
     }
 }
 impl Statement for VariableNamedExtractExpression {
@@ -40,7 +40,7 @@ impl Statement for VariableNamedExtractExpression {
         let dt = self.get_data_type()?.produce_llvm_type(data.context).as_basic_type_enum();
         let adjusted_location = data.builder.build_pointer_cast(location, dt.ptr_type(AddressSpace::default()), "__tmp__");
 
-        return Some(Box::new(data.builder.build_load(adjusted_location, "__tmp__")));
+        return Some(Box::new(data.builder.build_load(adjusted_location.unwrap(), "__tmp__").unwrap()));
     }
 }
 

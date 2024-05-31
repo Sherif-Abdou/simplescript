@@ -36,6 +36,7 @@ impl Statement for FunctionCallExpression {
         let call_output = data
             .builder
             .build_call(function, &mapped, "__tmp__")
+            .unwrap()
             .try_as_basic_value();
         if let Some(call_value) = call_output.left() {
             let as_any = call_value.as_any_value_enum();

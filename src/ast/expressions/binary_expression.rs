@@ -60,21 +60,21 @@ impl BinaryExpression {
                     }
                 };
 
-                return Box::new(value.as_any_value_enum());
+                return Box::new(value.unwrap().as_any_value_enum());
             }
             (AnyValueEnum::FloatValue(int_left), AnyValueEnum::FloatValue(int_right)) => {
                 let value: Box<dyn AnyValue> = match binary_type {
                     BinaryExpressionType::Addition => {
-                        Box::new(data.builder.build_float_add(int_left, int_right, "__tmp__"))
+                        Box::new(data.builder.build_float_add(int_left, int_right, "__tmp__").unwrap())
                     }
                     BinaryExpressionType::Subtraction => {
-                        Box::new(data.builder.build_float_sub(int_left, int_right, "__tmp__"))
+                        Box::new(data.builder.build_float_sub(int_left, int_right, "__tmp__").unwrap())
                     }
                     BinaryExpressionType::Multiplication => {
-                        Box::new(data.builder.build_float_mul(int_left, int_right, "__tmp__"))
+                        Box::new(data.builder.build_float_mul(int_left, int_right, "__tmp__").unwrap())
                     }
                     BinaryExpressionType::Division => {
-                        Box::new(data.builder.build_float_div(int_left, int_right, "__tmp__"))
+                        Box::new(data.builder.build_float_div(int_left, int_right, "__tmp__").unwrap())
                     }
                     _ => {
                         let predicate = match binary_type {
@@ -88,7 +88,7 @@ impl BinaryExpression {
                         };
                         Box::new(
                             data.builder
-                                .build_float_compare(predicate, int_left, int_right, "__tmp__"),
+                                .build_float_compare(predicate, int_left, int_right, "__tmp__").unwrap(),
                         )
                     }
                 };

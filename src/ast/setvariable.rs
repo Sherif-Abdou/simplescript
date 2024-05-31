@@ -32,14 +32,15 @@ impl Statement for SetVariable {
             };
             let basic_value: BasicValueEnum = value.as_any_value_enum().try_into().unwrap();
 
-            let res = data.builder.build_store(allocation, basic_value);
+            let res = data.builder.build_store(allocation, basic_value).unwrap();
 
             return Some(Box::new(res));
         }
         if !data.variable_table.borrow().contains_key(&self.name) {
             let allocation = data
                 .builder
-                .build_alloca(data_type.as_basic_type_enum(), &self.name);
+                .build_alloca(data_type.as_basic_type_enum(), &self.name)
+                .unwrap();
             data.variable_table
                 .borrow_mut()
                 .insert(self.name.clone(), allocation);
@@ -63,6 +64,6 @@ impl Statement for SetVariable {
             _ => unimplemented!(),
         };
 
-        Some(Box::new(res))
+        Some(Box::new(res.unwrap()))
     }
 }

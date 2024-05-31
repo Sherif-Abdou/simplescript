@@ -31,17 +31,17 @@ impl Statement for ExpressionCastExpression {
                     integer,
                     data.context.f64_type(),
                     "__tmp__",
-                )),
+                ).unwrap()),
                 "i64" => Box::new(data.builder.build_int_cast(
                     integer,
                     data.context.i64_type(),
                     "__tmp__",
-                )),
+                ).unwrap()),
                 "char" => Box::new(data.builder.build_int_cast(
                     integer,
                     data.context.i8_type(),
                     "__tmp__",
-                )),
+                ).unwrap()),
                 _ => unimplemented!(),
             };
 
@@ -53,11 +53,11 @@ impl Statement for ExpressionCastExpression {
             let basic_value: BasicValueEnum = compiled.try_into().unwrap();
 
             let result: Box<dyn AnyValue> = Box::new(
-                data.builder.build_bitcast(
+                data.builder.build_bit_cast(
                     basic_value,
                     pointer_type,
                     "__tmp__"
-                )
+                ).unwrap()
             );
 
             return Some(result);

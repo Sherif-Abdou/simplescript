@@ -32,7 +32,7 @@ impl Statement for UnaryExpression {
                     .unwrap()
                     .as_any_value_enum()
                     .into_pointer_value();
-                Some(Box::new(data.builder.build_load(location, "__tmp__")))
+                Some(Box::new(data.builder.build_load(location, "__tmp__").unwrap()))
             }
         };
     }
@@ -79,7 +79,7 @@ impl ExpressionStatement for UnaryExpression {
         let dereference = data.builder.build_load(
             self.interior.as_ref()?.expression_location(data)?,
             "__tmp__",
-        );
+        ).unwrap();
         if dereference.is_pointer_value() {
             let as_ptr_type = dereference.into_pointer_value();
 
