@@ -43,7 +43,12 @@ impl<'a> DataTypeParser<'a> {
                 }
             }
             Token::Identifier(iden) => {
-                self.internal_type = Some(self.data_types[&iden].clone());
+                self.internal_type = Some(self.data_types.get(&iden).cloned().unwrap_or_else(|| {
+                    DataType {
+                        symbol: iden.clone(),
+                        value: DataTypeEnum::Placeholder(iden.clone()),
+                    }
+                }));
                 if let Some(BuildType::Reference) = &self.build_type {
                     self.internal_type = Some(DataType {
                         symbol: format!("&{}", self.internal_type.as_ref().unwrap().symbol),

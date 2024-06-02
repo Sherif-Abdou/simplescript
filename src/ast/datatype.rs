@@ -9,12 +9,13 @@ use inkwell::{
 type DataTypeVector = Vec<Box<DataType>>;
 type NameMap = HashMap<String, u64>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DataTypeEnum {
     Primitive,
     Array(Box<DataType>, u64),
     Struct(DataTypeVector, NameMap),
     Pointer(Box<DataType>),
+    Placeholder(String),
 }
 
 #[derive(Clone, Debug)]
@@ -50,6 +51,7 @@ impl DataType {
                     .produce_llvm_type(compiler)
                     .ptr_type(AddressSpace::default()),
             ),
+            DataTypeEnum::Placeholder(_) => Box::new(compiler.i8_type().ptr_type(AddressSpace::default()))
         }
     }
 
@@ -89,6 +91,7 @@ impl DataType {
             }
             DataTypeEnum::Struct(ref values, ref names) => self.symbol.clone(),
             DataTypeEnum::Pointer(ref interior) => format!("&{}", interior.produce_string()),
+            DataTypeEnum::Placeholder(ref v) => format!("&{}", v),
         }
     }
 }

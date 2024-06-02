@@ -20,7 +20,6 @@ impl Statement for InsertVariable {
             .as_any_value_enum()
             .try_into()
             .unwrap();
-        // dbg!(&self.location);
         let ptr = self.location.expression_location(data).unwrap();
         let stored = data.builder.build_store(ptr, to_be_stored).unwrap();
         Some(Box::new(stored))

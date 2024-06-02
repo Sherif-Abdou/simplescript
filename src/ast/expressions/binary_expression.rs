@@ -1,3 +1,4 @@
+use inkwell::types::BasicType;
 use inkwell::{IntPredicate, FloatPredicate};
 use inkwell::values::{AnyValueEnum, AnyValue};
 
@@ -32,6 +33,38 @@ impl BinaryExpression {
     ) -> Box<AnyValueEnum<'a>> {
         match (parsed_left, parsed_right) {
             (AnyValueEnum::IntValue(int_left), AnyValueEnum::IntValue(int_right)) => {
+                let value = match binary_type {
+                    BinaryExpressionType::Addition => {
+                        data.builder.build_int_add(int_left, int_right, "__tmp__")
+                    }
+                    BinaryExpressionType::Subtraction => {
+                        data.builder.build_int_sub(int_left, int_right, "__tmp__")
+                    }
+                    BinaryExpressionType::Multiplication => {
+                        data.builder.build_int_mul(int_left, int_right, "__tmp__")
+                    }
+                    BinaryExpressionType::Division => data
+                        .builder
+                        .build_int_signed_div(int_left, int_right, "__tmp__"),
+                    _ => {
+                        let predicate = match binary_type {
+                            BinaryExpressionType::Equal => IntPredicate::EQ,
+                            BinaryExpressionType::NotEqual => IntPredicate::NE,
+                            BinaryExpressionType::Less => IntPredicate::SLT,
+                            BinaryExpressionType::LessEqual => IntPredicate::SLE,
+                            BinaryExpressionType::Greater => IntPredicate::SGE,
+                            BinaryExpressionType::GreaterEqual => IntPredicate::SGT,
+                            _ => unreachable!(),
+                        };
+                        data.builder
+                            .build_int_compare(predicate, int_left, int_right, "__tmp__")
+                    }
+                };
+
+                return Box::new(value.unwrap().as_any_value_enum());
+            }
+            (AnyValueEnum::PointerValue(ptr_left), AnyValueEnum::IntValue(int_right)) => {
+                let int_left = data.builder.build_bit_cast(ptr_left, int_right.get_type().as_basic_type_enum() , "__cast__").unwrap().into_int_value();
                 let value = match binary_type {
                     BinaryExpressionType::Addition => {
                         data.builder.build_int_add(int_left, int_right, "__tmp__")

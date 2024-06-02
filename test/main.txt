@@ -36,18 +36,24 @@ def free_string(str: &String): i64 {
     return 0
 }
 
+struct Node {
+    next: &Node
+}
+
 def main(): i64 {
-    s = make_string(1)
-    
-    string_append_char(&s, 'h')
-    putchar(s.capacity + 48)
-    string_append_char(&s, 'e')
-    putchar(s.capacity + 48)
-    string_append_char(&s, 'l')
-    putchar(s.capacity + 48)
-    string_append_char(&s, 'l')
-    putchar(s.capacity + 48)
-    string_append_char(&s, '\0')
-    putchar('\n')
+    a = Node()
+    b = Node()
+    c = Node()
+    a.next = &b
+    a.next->next = &c
+    a.next->next->next = 0
+
+    e = &a
+    while e != 0 {
+        s = "hello world"
+        puts(&s)
+        e = e->next
+    }
+
     return 0
 }

@@ -1,8 +1,11 @@
+use std::borrow::Borrow;
+
 use inkwell::{AddressSpace, values::PointerValue};
 use inkwell::types::BasicType;
 use inkwell::values::BasicValueEnum;
 
 use crate::ast::{Expression, Statement, DataTypeEnum, Compiler, DataType};
+use crate::parsing::DataTypeParser;
 
 use super::ExpressionStatement;
 
@@ -60,10 +63,36 @@ impl ExpressionStatement for VariableNamedExtractExpression {
     fn expression_location<'a>(&'a self, data: &'a crate::ast::Compiler) -> Option<inkwell::values::PointerValue<'a>> {
         let dt = self.location.data_type.clone()?;
         let location = self.location.expression_location(data)?;
-        if let DataTypeEnum::Struct(_, name_map) = &dt.value {
-            return Some(
-                data.builder.build_struct_gep(location, name_map[&self.named_location] as u32, "__tmp__").unwrap()
-            );
+        if let DataTypeEnum::Struct(types, name_map) = &dt.value {
+            let node = 
+                data.builder.build_struct_gep(location, name_map[&self.named_location] as u32, "__tmp__");
+            return match node {
+                Ok(v) => Some(v),
+                Err(inkwell::builder::BuilderError::GEPPointee) => {
+                    let new_location = data.builder.build_load(location, "__tmp__").unwrap();
+
+                    let attempted_type = types[name_map[&self.named_location] as usize].clone();
+                    if let DataTypeEnum::Pointer(ref v) = attempted_type.value {
+                        if let DataTypeEnum::Placeholder(ref k) = v.value {
+                            let parsed = DataTypeParser::new(&data.data_types).parse_string(attempted_type.symbol.clone());
+
+                            let t = parsed.produce_llvm_type(data.context);
+
+                            let v =data.builder.build_pointer_cast(location, t.as_basic_type_enum().into_pointer_type(), "__casted__").unwrap();
+                            let node = 
+                                data.builder.build_struct_gep(v, name_map[&self.named_location] as u32, "__tmp__");
+                            return Some(node.unwrap());
+                        }
+                    }
+
+
+                    let node = 
+                        data.builder.build_struct_gep(new_location.into_pointer_value(), name_map[&self.named_location] as u32, "__tmp__");
+                    return Some(node.unwrap());
+                }
+                _ => unreachable!(),
+            };
+        } else if let DataTypeEnum::Placeholder(ref v) = dt.value {
         }
 
         None
