@@ -173,6 +173,7 @@ impl Lexer {
                 "struct" => Token::Struct,
                 "extern" => Token::Extern,
                 "return" => Token::Return,
+                "variadic" => Token::Variadic,
                 _ => Token::Identifier(current_string),
             };
         }

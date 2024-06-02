@@ -18,16 +18,18 @@ impl Statement for StringExpression {
         &'a self,
         data: &'a crate::ast::Compiler,
     ) -> Option<Box<dyn inkwell::values::AnyValue + 'a>> {
-        let bytes: Vec<_> = self
+        let mut bytes: Vec<_> = self
             .value
             .as_bytes()
             .iter()
             .map(|v| data.context.i8_type().const_int(*v as u64, false))
             .collect();
-        // bytes.push(data.context.i8_type().const_zero());
+        bytes.push(data.context.i8_type().const_zero());
         let array = data.context.i8_type().const_array(&bytes);
+        let allocated = data.builder.build_alloca(array.get_type(), "__strstore__").unwrap();
 
-        return Some(Box::new(array));
+        data.builder.build_store(allocated, array).unwrap();
+        return Some(Box::new(allocated));
     }
 }
 
@@ -37,6 +39,6 @@ impl ExpressionStatement for StringExpression {
         scope: &dyn crate::ast::Scope,
         data_types: &std::collections::HashMap<String, crate::ast::DataType>,
     ) -> Option<String> {
-        Some(format!("[char:{}]", self.value.len()))
+        Some("&char".to_string())
     }
 }

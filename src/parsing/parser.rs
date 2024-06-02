@@ -64,6 +64,27 @@ impl Parser {
                 value: crate::ast::DataTypeEnum::Primitive,
             },
         );
+        data_types.insert(
+            "i32".to_string(),
+            DataType {
+                symbol: "i32".to_string(),
+                value: crate::ast::DataTypeEnum::Primitive,
+            },
+        );
+        data_types.insert(
+            "f32".to_string(),
+            DataType {
+                symbol: "f32".to_string(),
+                value: crate::ast::DataTypeEnum::Primitive,
+            },
+        );
+        data_types.insert(
+            "i16".to_string(),
+            DataType {
+                symbol: "i16".to_string(),
+                value: crate::ast::DataTypeEnum::Primitive,
+            },
+        );
         let mut scope_stack = ScopeStack::default();
         scope_stack.push_front(Box::new(RootScope::default()));
         Self {
@@ -258,7 +279,7 @@ impl Parser {
         if self.next() != Token::OpenCurly {
             return Err(Box::new(MissingToken));
         }
-        let (_, listing) = self.parse_data_type_list()?;
+        let (_, listing, _) = self.parse_data_type_list()?;
         let name_map: HashMap<String, u64> = listing.iter()
             .enumerate()
             .map(|(i, (name, _))| (name.to_string(), i as u64))
@@ -296,7 +317,7 @@ impl Parser {
         if Token::OpenParenth != self.next() {
             return Err(Box::new(MissingToken));
         };
-        let (mut next, params) = self.parse_data_type_list()?;
+        let (mut next, params, variadic) = self.parse_data_type_list()?;
 
         next = self.next();
         let mut return_type = None;
@@ -313,6 +334,7 @@ impl Parser {
         extern_function.name = func_name.to_string();
         extern_function.params = params;
         extern_function.is_extern = true;
+        extern_function.is_variadic = variadic;
 
         self.scope_stack.commands_mut().push(Box::new(extern_function));
         self.scope_stack
@@ -338,7 +360,7 @@ impl Parser {
         if Token::OpenParenth != self.next() {
             return Err(Box::new(MissingToken));
         };
-        let (mut next, params) = self.parse_data_type_list()?;
+        let (mut next, params, _) = self.parse_data_type_list()?;
 
         next = self.next();
         let mut return_type = None;
@@ -373,12 +395,17 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_data_type_list(&mut self) -> ParsingResult<(Token, Vec<(String, DataType)>)> {
+    fn parse_data_type_list(&mut self) -> ParsingResult<(Token, Vec<(String, DataType)>, bool)> {
         let mut next = self.next();
         let mut params = Vec::new();
         while next != Token::CloseParenth && next != Token::ClosedCurly {
             while next == Token::EOL {
                 next = self.next();
+            }
+            if next == Token::Variadic {
+                next = self.next();
+
+                return Ok((next, params, true));
             }
             let Token::Identifier(iden) = next.clone() else {
                 return Err(Box::new(MissingToken));
@@ -398,7 +425,7 @@ impl Parser {
                 next = self.next();
             }
         }
-        Ok((next, params))
+        Ok((next, params, false))
     }
 
     fn next(&self) -> Token {

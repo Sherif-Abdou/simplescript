@@ -37,6 +37,16 @@ impl Statement for ExpressionCastExpression {
                     data.context.i64_type(),
                     "__tmp__",
                 ).unwrap()),
+                "i32" => Box::new(data.builder.build_int_cast(
+                    integer,
+                    data.context.i32_type(),
+                    "__tmp__",
+                ).unwrap()),
+                "i16" => Box::new(data.builder.build_int_cast(
+                    integer,
+                    data.context.i16_type(),
+                    "__tmp__",
+                ).unwrap()),
                 "char" => Box::new(data.builder.build_int_cast(
                     integer,
                     data.context.i8_type(),

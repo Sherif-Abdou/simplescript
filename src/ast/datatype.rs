@@ -62,6 +62,9 @@ impl DataType {
         match self.symbol.as_str() {
             "i64" => Box::new(compiler.i64_type()),
             "f64" => Box::new(compiler.f64_type()),
+            "i32" => Box::new(compiler.i32_type()),
+            "f32" => Box::new(compiler.f32_type()),
+            "i16" => Box::new(compiler.i16_type()),
             "bool" => Box::new(compiler.bool_type()),
             "char" => Box::new(compiler.i8_type()),
             _ => panic!("Unidentified primitive"),

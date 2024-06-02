@@ -15,6 +15,7 @@ pub struct Function {
     pub functions: HashMap<String, Option<DataType>>,
     pub is_extern: bool,
     pub name: String,
+    pub is_variadic: bool, 
 }
 
 impl Function {
@@ -27,6 +28,7 @@ impl Function {
             functions: Default::default(),
             is_extern: false,
             name: "".to_string(),
+            is_variadic: false,
         }
     }
 }
@@ -82,8 +84,8 @@ impl Statement for Function {
         let fn_type = match self.return_type {
             Some(ref dt) => dt
                 .produce_llvm_type(&data.context)
-                .fn_type(&param_types, false),
-            None => data.context.void_type().fn_type(&param_types, false),
+                .fn_type(&param_types, self.is_variadic),
+            None => data.context.void_type().fn_type(&param_types, self.is_variadic),
         };
         let fn_value = data.module.add_function(&self.name, fn_type, None);
         data.function_table

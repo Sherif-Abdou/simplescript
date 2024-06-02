@@ -10,6 +10,7 @@ pub enum Token {
     Struct,
     While,
     Extern,
+    Variadic,
     Return,
     OpenCurly,
     ClosedCurly,
